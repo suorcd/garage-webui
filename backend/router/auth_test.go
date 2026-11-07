@@ -731,3 +731,25 @@ func TestLoginCookieSecureCanBeDisabled(t *testing.T) {
 	}
 }
 
+func TestLoginCookieSecureAcceptsCapitalisedFalse(t *testing.T) {
+	t.Setenv("SESSION_COOKIE_SECURE", "False")
+
+	handler := setupLoginHandler(t)
+
+	req := httptest.NewRequest(http.MethodPost, "/auth/login", strings.NewReader(`{"username":"admin","password":"correct-password"}`))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Requested-With", "XMLHttpRequest")
+	req.RemoteAddr = "192.0.2.99:1234"
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected login status 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	setCookie := rec.Header().Get("Set-Cookie")
+	if strings.Contains(setCookie, "; Secure") {
+		t.Errorf("expected the session cookie to skip Secure for SESSION_COOKIE_SECURE=False, got %q", setCookie)
+	}
+}
+

@@ -2,6 +2,7 @@ package utils
 
 import (
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/alexedwards/scs/v2"
@@ -18,8 +19,13 @@ func InitSessionManager() *scs.SessionManager {
 	sessMgr.Lifetime = 24 * time.Hour
 	// Secure by default: the app runs behind an HTTPS ingress. Local HTTP
 	// development sets SESSION_COOKIE_SECURE=false, or the browser drops
-	// the cookie and login never sticks.
-	sessMgr.Cookie.Secure = GetEnv("SESSION_COOKIE_SECURE", "true") != "false"
+	// the cookie and login never sticks. ParseBool accepts false, False,
+	// FALSE, and 0. An unparseable value stays secure.
+	secure, err := strconv.ParseBool(GetEnv("SESSION_COOKIE_SECURE", "true"))
+	if err != nil {
+		secure = true
+	}
+	sessMgr.Cookie.Secure = secure
 	sessMgr.Cookie.HttpOnly = true
 	sessMgr.Cookie.SameSite = http.SameSiteLaxMode
 	Session = &SessionManager{mgr: sessMgr}
