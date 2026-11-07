@@ -252,11 +252,9 @@ func TestGetOneObjectHeadFailureReturnsSingleErrorResponse(t *testing.T) {
 	}
 
 	body := rec.Body.String()
-	if body == "" {
-		t.Fatal("expected an error body, got an empty body")
-	}
-	if strings.HasSuffix(body, "null\n") {
-		t.Errorf("response body has a second JSON body appended: %q", body)
+	want := "operation error S3: HeadObject, https response error StatusCode: 404, RequestID: , HostID: , NotFound: "
+	if body != want {
+		t.Errorf("expected a single error body %q, got %q", want, body)
 	}
 }
 
