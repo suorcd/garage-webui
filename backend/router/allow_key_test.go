@@ -43,6 +43,7 @@ func newAllowKeyTestHandler(t *testing.T, garage *fakeAllowKeyGarage) http.Handl
 	t.Setenv("AUTH_DISABLED", "true")
 	t.Setenv("AUTH_USER_PASS", "")
 
+	utils.InitCacheManager()
 	sessionMgr := utils.InitSessionManager()
 	return sessionMgr.LoadAndSave(HandleApiRouter())
 }

@@ -53,6 +53,31 @@ func (b *Buckets) AllowKey(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	utils.Cache.ClearPrefix("key:")
+	writeGarageResponse(w, body)
+}
+
+func (b *Buckets) DenyKey(w http.ResponseWriter, r *http.Request) {
+	request, err := decodeBucketKeyRequest(w, r)
+	if err != nil {
+		utils.ResponseErrorStatus(w, err, http.StatusBadRequest)
+		return
+	}
+
+	body, err := utils.Garage.Fetch("/v2/DenyBucketKey", &utils.FetchOptions{
+		Method: http.MethodPost,
+		Body:   request,
+	})
+	if err != nil {
+		utils.ResponseError(w, err)
+		return
+	}
+
+	utils.Cache.ClearPrefix("key:")
+	writeGarageResponse(w, body)
+}
+
+func writeGarageResponse(w http.ResponseWriter, body []byte) {
 	var result interface{}
 	if len(body) > 0 {
 		if err := json.Unmarshal(body, &result); err != nil {
