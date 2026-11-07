@@ -16,6 +16,7 @@ export type Bucket = {
   unfinishedMultipartUploadParts: number;
   unfinishedMultipartUploadBytes: number;
   quotas: Quotas;
+  error?: string;
 };
 
 export type LocalAlias = {

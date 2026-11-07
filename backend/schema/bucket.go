@@ -22,6 +22,9 @@ type Bucket struct {
 	UnfinishedMultipartUploadBytes int64         `json:"unfinishedMultipartUploadBytes"`
 	Quotas                         Quotas        `json:"quotas"`
 	Created                        string        `json:"created"`
+	// Error carries a per-bucket fetch failure. GetAll sets it instead of
+	// returning a silent skeleton with missing counts and keys.
+	Error string `json:"error,omitempty"`
 }
 
 type LocalAlias struct {

@@ -648,6 +648,11 @@ func (b *Browse) DeleteObject(w http.ResponseWriter, r *http.Request) {
 
 const deleteObjectsBatchSize = 1000
 
+// deleteObjectsMaxPerRequest caps the objects one recursive delete request
+// removes. The result reports Truncated when objects remain, so the caller
+// can repeat the request to delete the rest.
+const deleteObjectsMaxPerRequest = 10000
+
 func deleteDirectoryObjects(ctx context.Context, client *s3.Client, bucket, prefix string) (schema.DeleteObjectsResult, error) {
 	result := schema.DeleteObjectsResult{}
 	var continuationToken *string
@@ -688,6 +693,11 @@ func deleteDirectoryObjects(ctx context.Context, client *s3.Client, bucket, pref
 					Message: aws.ToString(deleteErr.Message),
 				})
 			}
+		}
+
+		if result.Deleted >= deleteObjectsMaxPerRequest && objects.IsTruncated != nil && *objects.IsTruncated {
+			result.Truncated = true
+			return result, nil
 		}
 
 		if objects.IsTruncated == nil || !*objects.IsTruncated {
