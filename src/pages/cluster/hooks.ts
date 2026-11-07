@@ -24,7 +24,10 @@ export const useNodeInfo = () => {
       api.get<GetNodeInfoResult>("/v2/GetNodeInfo", {
         params: { node: "self" },
       }),
-    select: (data) => Object.values(data?.success || {})?.[0],
+    select: (data) => ({
+      node: data.success?.["self"],
+      error: data.error?.["self"],
+    }),
   });
 };
 
@@ -87,9 +90,9 @@ export const useUnassignNode = (
 };
 
 export const useRevertChanges = (
-  options?: Partial<UseMutationOptions<unknown, Error, number>>
+  options?: Partial<UseMutationOptions<unknown, Error, void>>
 ) => {
-  return useMutation<unknown, Error, number>({
+  return useMutation<unknown, Error, void>({
     mutationFn: () => api.post<unknown>("/v2/RevertClusterLayout"),
     ...options,
   });

@@ -10,7 +10,7 @@ export type GetNodeInfoResult = {
       dbEngine:       string;
     };
   };
-  error:   Error;
+  error: Record<string, string>;
 }
 
 
