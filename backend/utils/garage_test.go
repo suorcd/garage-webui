@@ -185,6 +185,31 @@ func TestFetchKeepsOneContentTypeWhenCallerSetsIt(t *testing.T) {
 	}
 }
 
+func TestFetchKeepsCallerContentTypeWithoutBody(t *testing.T) {
+	var contentTypes []string
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		contentTypes = r.Header.Values("Content-Type")
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`{}`))
+	}))
+	t.Cleanup(server.Close)
+
+	t.Setenv("API_BASE_URL", server.URL)
+	t.Setenv("API_ADMIN_KEY", "test-admin-key")
+
+	g := &garage{}
+	if _, err := g.Fetch("/v2/ListBuckets", &FetchOptions{
+		Headers: map[string]string{"Content-Type": "text/plain"},
+	}); err != nil {
+		t.Fatalf("expected a successful request, got %v", err)
+	}
+
+	if len(contentTypes) != 1 || contentTypes[0] != "text/plain" {
+		t.Errorf("expected one Content-Type text/plain, got %q", contentTypes)
+	}
+}
+
 func TestFetchSurfacesJSONErrorMessage(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
