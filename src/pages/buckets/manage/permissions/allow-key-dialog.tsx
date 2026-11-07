@@ -69,12 +69,23 @@ const AllowKeyDialog = ({ currentKeys }: Props) => {
   };
 
   const onSubmit = form.handleSubmit((values) => {
+    form.clearErrors("root");
+
     const data = values.keys
-      .filter((key) => key.checked)
+      .filter((key) => key.read || key.write || key.owner)
       .map((key) => ({
         keyId: key.keyId,
         permissions: { read: key.read, write: key.write, owner: key.owner },
       }));
+
+    if (!data.length) {
+      form.setError("root", {
+        type: "manual",
+        message: "Select at least one key and permission.",
+      });
+      return;
+    }
+
     allowKey.mutate(data);
   });
 
@@ -87,7 +98,10 @@ const AllowKeyDialog = ({ currentKeys }: Props) => {
       <Modal ref={dialogRef} backdrop open={isOpen} className="max-w-2xl">
         <Modal.Header className="mb-1">Allow Key</Modal.Header>
         <Modal.Body>
-          <p>Enter the key you want to allow access to.</p>
+          <p>Select one or more keys and the permissions to grant.</p>
+          <p className="text-base-content/60 text-sm mt-1">
+            Tick at least one permission for each key.
+          </p>
 
           <div className="overflow-x-auto mt-4">
             <Table>
@@ -149,15 +163,33 @@ const AllowKeyDialog = ({ currentKeys }: Props) => {
                       <span>
                         {curKey?.bucketLocalAliases?.join(", ") || "-"}
                       </span>
-                      <CheckboxField form={form} name={`keys.${index}.read`} />
-                      <CheckboxField form={form} name={`keys.${index}.write`} />
-                      <CheckboxField form={form} name={`keys.${index}.owner`} />
+                      <CheckboxField
+                        form={form}
+                        name={`keys.${index}.read`}
+                        aria-label={`Read ${field.name || field.keyId}`}
+                      />
+                      <CheckboxField
+                        form={form}
+                        name={`keys.${index}.write`}
+                        aria-label={`Write ${field.name || field.keyId}`}
+                      />
+                      <CheckboxField
+                        form={form}
+                        name={`keys.${index}.owner`}
+                        aria-label={`Owner ${field.name || field.keyId}`}
+                      />
                     </Table.Row>
                   );
                 })}
               </Table.Body>
             </Table>
           </div>
+
+          {form.formState.errors.root ? (
+            <p className="text-error text-sm mt-2">
+              {form.formState.errors.root.message}
+            </p>
+          ) : null}
         </Modal.Body>
 
         <Modal.Actions>

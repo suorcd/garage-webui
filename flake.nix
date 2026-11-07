@@ -44,7 +44,7 @@
             inherit version src;
             pnpm = pkgs.pnpm_10;
             fetcherVersion = 5;
-            hash = "sha256-+TLHwealIXo4jdD10D6cdCxQl5iR7G7QC5BTNi9Bd5k=";
+            hash = "sha256-PrzKAigyk+TTBCDhEdaCCiWZ51ocQQYloSjTAmhuWWM=";
           };
 
           buildPhase = ''
@@ -58,6 +58,7 @@
           checkPhase = ''
             runHook preCheck
             pnpm run lint
+            pnpm run test
             runHook postCheck
           '';
 

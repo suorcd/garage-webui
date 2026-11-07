@@ -117,6 +117,7 @@ Build, development, and operations:
 nix develop                      # Go, gopls, Node 22, pnpm 10, Air, Garage, jq, curl
 pnpm install                     # frontend dependencies
 dev                              # Garage node, API on :3909, Vite on :5173
+pnpm test                        # vitest
 nix build                        # one binary, UI embedded
 nix run                          # build and run in one step
 nix fmt                          # nixfmt
@@ -135,6 +136,7 @@ The toolchain also works without Nix. Keep both paths working:
 ```sh
 pnpm install --frozen-lockfile   # install exactly the locked tree
 pnpm lint                        # eslint, must exit 0
+pnpm test                        # vitest, must exit 0
 pnpm build                       # tsc -b && vite build, must exit 0
 pnpm dev                         # vite plus the Go backend with Air
 
@@ -194,9 +196,8 @@ nix build -L
 - The backend has tests: `backend/router/browse_test.go`. Add a new Go test as
   `<file>_test.go` in the package that holds the code, and call the handler through the
   router with a real request.
-- The frontend has no test runner. There is no `vitest` and no `jest`. Add `vitest`,
-  `@testing-library/react`, and `jsdom` in the same change that adds the first frontend
-  test, and add a `test` script to `package.json`.
+- The frontend uses `vitest` with `jsdom` and Testing Library. Run `pnpm test`. Add a test
+  as `*.test.tsx` next to the component. Render the component and act on it as a user does.
 
 Do not record `No test:` for a change that has observable behavior.
 
@@ -229,7 +230,7 @@ cannot tell "no test needed" from "no test written".
 The repository has no CI configuration. `nix build` runs the Go tests in its `checkPhase`.
 Otherwise, verification is local and manual:
 
-- `pnpm lint`, `pnpm build`, and `nix build` must pass before a merge.
+- `pnpm lint`, `pnpm test`, `pnpm build`, and `nix build` must pass before a merge.
 - `go vet ./...` and `go test ./...` must pass in `backend/` when the backend changed.
 - Run the test protocol above and put the output in the pull request.
 
@@ -279,8 +280,8 @@ Garage cluster.
 A change is done when all of these are true:
 
 - The red run and the green run exist, with captured output.
-- `pnpm lint` and `pnpm build` pass. `go vet ./...` and `go test ./...` pass in `backend/`
-  when the backend changed.
+- `pnpm lint` and `pnpm build` pass. `pnpm test` passes. `go vet ./...` and `go test ./...`
+  pass in `backend/` when the backend changed.
 - `nix build -L` passes when the change can affect the build.
 - The full test suite passes, and you report the totals.
 - The prose follows ASD-STE100, and the diff contains only the change.

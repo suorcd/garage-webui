@@ -64,6 +64,10 @@ export const useAllowKey = (
 ) => {
   return useMutation({
     mutationFn: async (payload) => {
+      if (payload.length === 0) {
+        throw new Error("Select at least one key and permission.");
+      }
+
       const promises = payload.map(async (key) => {
         return api.post("/v2/AllowBucketKey", {
           body: {
