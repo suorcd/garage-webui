@@ -9,6 +9,10 @@ import { copyToClipboard, handleError } from "@/lib/utils";
 import { useCallback, useMemo, useState } from "react";
 import api from "@/lib/api";
 
+type KeySecret = {
+  secretAccessKey?: string | null;
+};
+
 const KeysPage = () => {
   const { data, refetch } = useKeys();
   const [search, setSearch] = useState("");
@@ -24,13 +28,14 @@ const KeysPage = () => {
 
   const fetchSecretKey = useCallback(async (id: string) => {
     try {
-      const result = await api.get("/v2/GetKeyInfo", {
+      const result = await api.get<KeySecret>("/v2/GetKeyInfo", {
         params: { id, showSecretKey: "true" },
       });
-      if (!result?.secretAccessKey) {
+      const secretAccessKey = result?.secretAccessKey;
+      if (!secretAccessKey) {
         throw new Error("Failed to fetch secret key");
       }
-      setSecretKeys((prev) => ({ ...prev, [id]: result.secretAccessKey }));
+      setSecretKeys((prev) => ({ ...prev, [id]: secretAccessKey }));
     } catch (err) {
       handleError(err);
     }

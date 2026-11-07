@@ -10,17 +10,13 @@ type Props = React.ComponentPropsWithoutRef<"div"> & {
 
 const Chips = forwardRef<HTMLDivElement, Props>(
   ({ className, children, onRemove, ...props }, ref) => {
-    const Comp = props.onClick ? "button" : "div";
-
-    return (
-      <Comp
-        ref={ref as never}
-        className={cn(
-          "inline-flex flex-row items-center h-8 px-4 rounded-full text-sm border border-primary/80 text-base-content cursor-default",
-          className
-        )}
-        {...(props as any)}
-      >
+    const { onClick, ...rest } = props;
+    const classes = cn(
+      "inline-flex flex-row items-center h-8 px-4 rounded-full text-sm border border-primary/80 text-base-content cursor-default",
+      className
+    );
+    const content = (
+      <>
         {children}
         {onRemove ? (
           <Button
@@ -33,7 +29,26 @@ const Chips = forwardRef<HTMLDivElement, Props>(
             <X size={16} />
           </Button>
         ) : null}
-      </Comp>
+      </>
+    );
+
+    if (onClick) {
+      return (
+        <button
+          ref={ref as never}
+          className={classes}
+          onClick={onClick}
+          {...(rest as React.ButtonHTMLAttributes<HTMLButtonElement>)}
+        >
+          {content}
+        </button>
+      );
+    }
+
+    return (
+      <div ref={ref} className={classes} {...rest}>
+        {content}
+      </div>
     );
   }
 );

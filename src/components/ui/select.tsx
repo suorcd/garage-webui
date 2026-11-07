@@ -8,12 +8,12 @@ type Props = ComponentPropsWithoutRef<typeof BaseSelect> & {
   onCreateOption?: (inputValue: string) => void;
 };
 
-const Select = forwardRef<any, Props>(({ creatable, ...props }, ref) => {
+const Select = forwardRef<unknown, Props>(({ creatable, ...props }, ref) => {
   const Comp = creatable ? Creatable : BaseSelect;
 
   return (
     <Comp
-      ref={ref}
+      ref={ref as never}
       unstyled
       classNames={{
         control: (p) =>

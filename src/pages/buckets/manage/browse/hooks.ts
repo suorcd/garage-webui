@@ -24,7 +24,7 @@ export const useBrowseObjects = (
 
 export const usePutObject = (
   bucket: string,
-  options?: UseMutationOptions<any, Error, PutObjectPayload>
+  options?: UseMutationOptions<unknown, Error, PutObjectPayload>
 ) => {
   return useMutation({
     mutationFn: async (body) => {
