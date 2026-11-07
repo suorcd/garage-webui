@@ -1,6 +1,7 @@
 package router
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -8,6 +9,7 @@ import (
 	"io"
 	"khairul169/garage-webui/schema"
 	"khairul169/garage-webui/utils"
+	"mime/multipart"
 	"net/http"
 	"strconv"
 	"strings"
@@ -169,20 +171,29 @@ func (b *Browse) GetOneObject(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+const (
+	defaultMaxUploadSize int64 = 5 << 30
+	uploadPartSize       int64 = 5 << 20
+)
+
+func maxUploadSize() int64 {
+	value := utils.GetEnv("MAX_UPLOAD_SIZE", "")
+	if value == "" {
+		return defaultMaxUploadSize
+	}
+
+	size, err := strconv.ParseInt(value, 10, 64)
+	if err != nil || size <= 0 {
+		return defaultMaxUploadSize
+	}
+
+	return size
+}
+
 func (b *Browse) PutObject(w http.ResponseWriter, r *http.Request) {
 	bucket := r.PathValue("bucket")
 	key := r.PathValue("key")
 	isDirectory := strings.HasSuffix(key, "/")
-
-	file, headers, err := r.FormFile("file")
-	if err != nil && !isDirectory {
-		utils.ResponseError(w, err)
-		return
-	}
-
-	if file != nil {
-		defer file.Close()
-	}
 
 	client, err := getS3Client(bucket)
 	if err != nil {
@@ -190,28 +201,195 @@ func (b *Browse) PutObject(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var contentType string = ""
-	var size int64 = 0
+	reader, err := r.MultipartReader()
+	if err != nil {
+		if isDirectory {
+			putEmptyObject(w, r.Context(), client, bucket, key)
+			return
+		}
 
-	if file != nil {
-		contentType = headers.Header.Get("Content-Type")
-		size = headers.Size
+		utils.ResponseErrorStatus(w, errors.New("request must use multipart/form-data"), http.StatusBadRequest)
+		return
 	}
 
-	result, err := client.PutObject(context.Background(), &s3.PutObjectInput{
+	var file *multipart.Part
+	for {
+		part, err := reader.NextPart()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			utils.ResponseErrorStatus(w, fmt.Errorf("cannot read multipart body: %w", err), http.StatusBadRequest)
+			return
+		}
+
+		if part.FormName() == "file" {
+			file = part
+			break
+		}
+
+		part.Close()
+	}
+
+	if file == nil {
+		if isDirectory {
+			putEmptyObject(w, r.Context(), client, bucket, key)
+			return
+		}
+
+		utils.ResponseErrorStatus(w, errors.New("multipart field \"file\" is missing"), http.StatusBadRequest)
+		return
+	}
+	defer file.Close()
+
+	putFilePart(w, r.Context(), client, bucket, key, file, maxUploadSize())
+}
+
+func putEmptyObject(w http.ResponseWriter, ctx context.Context, client *s3.Client, bucket, key string) {
+	result, err := client.PutObject(ctx, &s3.PutObjectInput{
 		Bucket:        aws.String(bucket),
 		Key:           aws.String(key),
-		Body:          file,
-		ContentLength: aws.Int64(size),
-		ContentType:   aws.String(contentType),
+		Body:          bytes.NewReader(nil),
+		ContentLength: aws.Int64(0),
 	})
-
 	if err != nil {
 		utils.ResponseError(w, fmt.Errorf("cannot put object: %w", err))
 		return
 	}
 
 	utils.ResponseSuccess(w, result)
+}
+
+func putFilePart(w http.ResponseWriter, ctx context.Context, client *s3.Client, bucket, key string, file *multipart.Part, limit int64) {
+	contentType := file.Header.Get("Content-Type")
+	if contentType == "" {
+		contentType = "application/octet-stream"
+	}
+
+	buffer := make([]byte, uploadPartSize)
+	n, readErr := io.ReadFull(file, buffer)
+	if readErr != nil && readErr != io.EOF && readErr != io.ErrUnexpectedEOF {
+		utils.ResponseError(w, fmt.Errorf("cannot read upload: %w", readErr))
+		return
+	}
+
+	total := int64(n)
+	if total > limit {
+		utils.ResponseErrorStatus(w, uploadTooLargeError(limit), http.StatusRequestEntityTooLarge)
+		return
+	}
+
+	if readErr == io.EOF || readErr == io.ErrUnexpectedEOF {
+		result, err := client.PutObject(ctx, &s3.PutObjectInput{
+			Bucket:        aws.String(bucket),
+			Key:           aws.String(key),
+			Body:          bytes.NewReader(buffer[:n]),
+			ContentLength: aws.Int64(total),
+			ContentType:   aws.String(contentType),
+		})
+		if err != nil {
+			utils.ResponseError(w, fmt.Errorf("cannot put object: %w", err))
+			return
+		}
+
+		utils.ResponseSuccess(w, result)
+		return
+	}
+
+	createResult, err := client.CreateMultipartUpload(ctx, &s3.CreateMultipartUploadInput{
+		Bucket:      aws.String(bucket),
+		Key:         aws.String(key),
+		ContentType: aws.String(contentType),
+	})
+	if err != nil {
+		utils.ResponseError(w, fmt.Errorf("cannot start multipart upload: %w", err))
+		return
+	}
+
+	uploadID := aws.ToString(createResult.UploadId)
+	if uploadID == "" {
+		utils.ResponseError(w, errors.New("cannot start multipart upload: empty upload ID"))
+		return
+	}
+
+	completed := false
+	defer func() {
+		if completed {
+			return
+		}
+
+		abortCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+
+		_, _ = client.AbortMultipartUpload(abortCtx, &s3.AbortMultipartUploadInput{
+			Bucket:   aws.String(bucket),
+			Key:      aws.String(key),
+			UploadId: aws.String(uploadID),
+		})
+	}()
+
+	parts := make([]types.CompletedPart, 0, 8)
+	partNumber := int32(1)
+
+	for {
+		partResult, err := client.UploadPart(ctx, &s3.UploadPartInput{
+			Bucket:        aws.String(bucket),
+			Key:           aws.String(key),
+			UploadId:      aws.String(uploadID),
+			PartNumber:    aws.Int32(partNumber),
+			Body:          bytes.NewReader(buffer[:n]),
+			ContentLength: aws.Int64(int64(n)),
+		})
+		if err != nil {
+			utils.ResponseError(w, fmt.Errorf("cannot upload part %d: %w", partNumber, err))
+			return
+		}
+
+		parts = append(parts, types.CompletedPart{
+			ETag:       partResult.ETag,
+			PartNumber: aws.Int32(partNumber),
+		})
+
+		if readErr == io.ErrUnexpectedEOF {
+			break
+		}
+
+		n, readErr = io.ReadFull(file, buffer)
+		if readErr == io.EOF {
+			break
+		}
+		if readErr != nil && readErr != io.ErrUnexpectedEOF {
+			utils.ResponseError(w, fmt.Errorf("cannot read upload: %w", readErr))
+			return
+		}
+
+		total += int64(n)
+		if total > limit {
+			utils.ResponseErrorStatus(w, uploadTooLargeError(limit), http.StatusRequestEntityTooLarge)
+			return
+		}
+		partNumber++
+	}
+
+	result, err := client.CompleteMultipartUpload(ctx, &s3.CompleteMultipartUploadInput{
+		Bucket:   aws.String(bucket),
+		Key:      aws.String(key),
+		UploadId: aws.String(uploadID),
+		MultipartUpload: &types.CompletedMultipartUpload{
+			Parts: parts,
+		},
+	})
+	if err != nil {
+		utils.ResponseError(w, fmt.Errorf("cannot complete multipart upload: %w", err))
+		return
+	}
+
+	completed = true
+	utils.ResponseSuccess(w, result)
+}
+
+func uploadTooLargeError(limit int64) error {
+	return fmt.Errorf("upload is larger than the %d byte limit", limit)
 }
 
 func (b *Browse) DeleteObject(w http.ResponseWriter, r *http.Request) {
