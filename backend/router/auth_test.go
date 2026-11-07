@@ -219,3 +219,121 @@ func TestGetStatusReportsAuthenticatedWithSession(t *testing.T) {
 		t.Error("expected enabled true with AUTH_USER_PASS set, got false")
 	}
 }
+
+func setupLoginHandler(t *testing.T) http.Handler {
+	t.Helper()
+
+	hash, err := bcrypt.GenerateFromPassword([]byte("correct-password"), bcrypt.MinCost)
+	if err != nil {
+		t.Fatalf("cannot hash test password: %v", err)
+	}
+
+	t.Setenv("AUTH_USER_PASS", "admin:"+string(hash))
+	t.Setenv("AUTH_DISABLED", "")
+
+	return newTestAPIHandler()
+}
+
+func loginAttempt(t *testing.T, handler http.Handler, remoteAddr, forwardedFor, username, password string) int {
+	t.Helper()
+
+	body := fmt.Sprintf(`{"username":%q,"password":%q}`, username, password)
+	req := httptest.NewRequest(http.MethodPost, "/auth/login", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Requested-With", "XMLHttpRequest")
+	if remoteAddr != "" {
+		req.RemoteAddr = remoteAddr
+	}
+	if forwardedFor != "" {
+		req.Header.Set("X-Forwarded-For", forwardedFor)
+	}
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	return rec.Code
+}
+
+func TestLoginLimiterKeysOnUsername(t *testing.T) {
+	handler := setupLoginHandler(t)
+	t.Cleanup(func() { loginLimits.ResetAll() })
+
+	for i := 0; i < loginMaxFailures; i++ {
+		if code := loginAttempt(t, handler, "192.0.2.1:1234", "", "alice", "wrong-password"); code != http.StatusUnauthorized {
+			t.Fatalf("attempt %d: expected status 401, got %d", i+1, code)
+		}
+	}
+	if code := loginAttempt(t, handler, "192.0.2.1:1234", "", "alice", "wrong-password"); code != http.StatusTooManyRequests {
+		t.Errorf("expected a sixth alice attempt to be rate limited, got %d", code)
+	}
+	if code := loginAttempt(t, handler, "192.0.2.1:1234", "", "admin", "correct-password"); code != http.StatusOK {
+		t.Errorf("expected admin to log in from the same IP, got %d", code)
+	}
+}
+
+func TestLoginLimiterTrustsForwardedForFromTrustedProxy(t *testing.T) {
+	t.Setenv("TRUSTED_PROXIES", "192.0.2.1")
+
+	handler := setupLoginHandler(t)
+	t.Cleanup(func() { loginLimits.ResetAll() })
+
+	for i := 0; i < loginMaxFailures; i++ {
+		if code := loginAttempt(t, handler, "192.0.2.1:1234", "203.0.113.5", "alice", "wrong-password"); code != http.StatusUnauthorized {
+			t.Fatalf("attempt %d: expected status 401, got %d", i+1, code)
+		}
+	}
+	if code := loginAttempt(t, handler, "192.0.2.1:1234", "203.0.113.6", "admin", "correct-password"); code != http.StatusOK {
+		t.Errorf("expected a different client behind the proxy to log in, got %d", code)
+	}
+}
+
+func TestLoginLimiterIgnoresForwardedForFromUntrustedProxy(t *testing.T) {
+	handler := setupLoginHandler(t)
+	t.Cleanup(func() { loginLimits.ResetAll() })
+
+	// Same username for the failures and the login: only the X-Forwarded-For
+	// value differs, so a trusted header would split the bucket.
+	for i := 0; i < loginMaxFailures; i++ {
+		if code := loginAttempt(t, handler, "192.0.2.1:1234", "203.0.113.5", "admin", "wrong-password"); code != http.StatusUnauthorized {
+			t.Fatalf("attempt %d: expected status 401, got %d", i+1, code)
+		}
+	}
+	if code := loginAttempt(t, handler, "192.0.2.1:1234", "203.0.113.6", "admin", "correct-password"); code != http.StatusTooManyRequests {
+		t.Errorf("expected the ingress IP to stay locked out, got %d", code)
+	}
+}
+
+func TestLoginLimiterIgnoresSpoofedForwardedFor(t *testing.T) {
+	t.Setenv("TRUSTED_PROXIES", "192.0.2.1")
+
+	handler := setupLoginHandler(t)
+	t.Cleanup(func() { loginLimits.ResetAll() })
+
+	for i := 0; i < loginMaxFailures; i++ {
+		if code := loginAttempt(t, handler, "192.0.2.1:1234", "203.0.113.99, 203.0.113.5", "alice", "wrong-password"); code != http.StatusUnauthorized {
+			t.Fatalf("attempt %d: expected status 401, got %d", i+1, code)
+		}
+	}
+	if code := loginAttempt(t, handler, "192.0.2.1:1234", "203.0.113.99, 203.0.113.6", "admin", "correct-password"); code != http.StatusOK {
+		t.Errorf("expected a different client behind the proxy to log in, got %d", code)
+	}
+}
+
+func TestLoginRejectsOversizedBody(t *testing.T) {
+	handler := setupLoginHandler(t)
+	t.Cleanup(func() { loginLimits.ResetAll() })
+
+	body := `{"username":"admin","password":"correct-password","padding":"` + strings.Repeat("x", 70*1024) + `"}`
+	req := httptest.NewRequest(http.MethodPost, "/auth/login", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Requested-With", "XMLHttpRequest")
+	req.RemoteAddr = "192.0.2.99:1234"
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("expected status 500 for an oversized body, got %d: %s", rec.Code, rec.Body.String())
+	}
+	if !strings.Contains(rec.Body.String(), "too large") {
+		t.Errorf("expected a body-too-large error, got %q", rec.Body.String())
+	}
+}
+
