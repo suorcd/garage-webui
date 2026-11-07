@@ -5,7 +5,7 @@ import (
 	"net/http"
 )
 
-func HandleApiRouter() *http.ServeMux {
+func HandleApiRouter() http.Handler {
 	mux := http.NewServeMux()
 
 	auth := &Auth{}
@@ -31,5 +31,5 @@ func HandleApiRouter() *http.ServeMux {
 	router.HandleFunc("/", ProxyHandler)
 
 	mux.Handle("/", middleware.AuthMiddleware(router))
-	return mux
+	return middleware.CSRFMiddleware(mux)
 }

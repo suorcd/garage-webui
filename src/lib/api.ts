@@ -21,7 +21,9 @@ export class APIError extends Error {
 
 const api = {
   async fetch<T = any>(url: string, options?: Partial<FetchOptions>) {
-    const headers: Record<string, string> = {};
+    const headers: Record<string, string> = {
+      "X-Requested-With": "XMLHttpRequest",
+    };
     const _url = new URL(API_URL + url, window.location.origin);
 
     if (options?.params) {

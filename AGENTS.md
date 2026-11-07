@@ -246,6 +246,9 @@ Garage cluster.
   response holds the `s3_web` bind address and root domain. The test in
   `backend/router/config_test.go` asserts that the response has no secret field. Do not add
   an internal config field to the response.
+- **Auth fails closed.** The server refuses to start when `AUTH_USER_PASS` is empty. Use
+  `AUTH_DISABLED=true` only for local development. State-changing API requests require the
+  `X-Requested-With: XMLHttpRequest` header.
 - **Secrets.** Never commit a real Garage admin token, S3 key, or `.env` file.
   `.env.example` holds placeholders only. `.gitignore` ignores `.env*` and every
   `garage.toml` except `dev/garage.toml`.
