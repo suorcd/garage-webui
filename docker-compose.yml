@@ -24,3 +24,4 @@ services:
     environment:
       API_BASE_URL: "http://garage:3903"
       S3_ENDPOINT_URL: "http://garage:3900"
+      AUTH_USER_PASS: "${AUTH_USER_PASS:?set AUTH_USER_PASS}"

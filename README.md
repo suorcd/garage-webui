@@ -24,6 +24,8 @@ The Garage Web UI is available as a single executable binary and docker image. Y
 $ docker run -p 3909:3909 -v ./garage.toml:/etc/garage.toml:ro --restart unless-stopped --name garage-webui khairul169/garage-webui:latest
 ```
 
+The container does not start without `AUTH_USER_PASS`. See [Authentication](#authentication).
+
 ### Docker Compose
 
 If you install Garage using Docker, you can install this web UI alongside Garage as follows:
@@ -55,6 +57,7 @@ services:
     environment:
       API_BASE_URL: "http://garage:3903"
       S3_ENDPOINT_URL: "http://garage:3900"
+      AUTH_USER_PASS: "username:$2y$10$DSTi9o..."
 ```
 
 ### Without Docker
@@ -177,10 +180,12 @@ Configurable envs:
 - `API_ADMIN_KEY`: Admin API key.
 - `S3_REGION`: S3 Region.
 - `S3_ENDPOINT_URL`: S3 Endpoint url.
+- `AUTH_USER_PASS`: The login in `username:password_hash` format. The server refuses to start when this value is empty, unless `AUTH_DISABLED=true`.
+- `AUTH_DISABLED`: Set to `true` to disable authentication for local development. The server logs a warning. Do not use this value in production.
 
 ### Authentication
 
-Enable authentication by setting the `AUTH_USER_PASS` environment variable in the format `username:password_hash`, where `password_hash` is a bcrypt hash of the password.
+Authentication is required. Set the `AUTH_USER_PASS` environment variable in the format `username:password_hash`, where `password_hash` is a bcrypt hash of the password.
 
 Generate the username and password hash using the following command:
 
@@ -199,6 +204,10 @@ webui:
     AUTH_USER_PASS: "username:$2y$10$DSTi9o..."
 ```
 
+The server refuses to start when `AUTH_USER_PASS` is empty. For local development only, set `AUTH_DISABLED=true` to disable authentication. The server logs a warning in this mode.
+
+The API requires the `X-Requested-With: XMLHttpRequest` header on every `POST`, `PUT`, `PATCH`, and `DELETE` request. The web UI sends this header. A script that calls the API must send it too. This header is the CSRF control.
+
 ### Running
 
 Once your instance of Garage Web UI is started, you can open the web UI at http://your-ip:3909. You can place it behind a reverse proxy to secure it with SSL.
@@ -215,7 +224,7 @@ $ pnpm install
 $ dev
 ```
 
-`dev` starts a single-node Garage instance on ports 3900 (S3), 3901 (RPC), and 3903 (admin API), provisions the `garage-webui` bucket alias and `dev-key` access key, and then runs the Go API with live reload on port 3909 and Vite on port 5173.
+`dev` starts a single-node Garage instance on ports 3900 (S3), 3901 (RPC), and 3903 (admin API), provisions the `garage-webui` bucket alias and `dev-key` access key, and then runs the Go API with live reload on port 3909 and Vite on port 5173. The `dev` script disables authentication. Do not expose the development server to an untrusted network.
 
 The local Garage data lives in `.dev/garage`. To stop it and remove all local development state, run:
 

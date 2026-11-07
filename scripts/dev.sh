@@ -24,6 +24,7 @@ export API_BASE_URL="${API_BASE_URL:-http://127.0.0.1:3903}"
 export API_ADMIN_KEY="${API_ADMIN_KEY:-dev-admin-token}"
 export S3_ENDPOINT_URL="${S3_ENDPOINT_URL:-http://127.0.0.1:3900}"
 export S3_REGION="${S3_REGION:-garage}"
+export AUTH_DISABLED="${AUTH_DISABLED:-true}"
 export VITE_API_URL="${VITE_API_URL:-http://127.0.0.1:3909}"
 
 mkdir -p .dev/garage/meta .dev/garage/data
