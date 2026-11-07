@@ -158,7 +158,10 @@ func trustedProxy(ip string) bool {
 			}
 			continue
 		}
-		if entry == ip {
+		// Unparseable entries (hostnames, zone-scoped addresses) compare
+		// case-insensitively: DNS names are case-insensitive, and a zone
+		// suffix keeps an address from parsing.
+		if strings.EqualFold(entry, ip) {
 			return true
 		}
 	}

@@ -279,7 +279,7 @@ func TestLoginLimiterTrustsForwardedForFromTrustedProxy(t *testing.T) {
 	t.Cleanup(func() { loginLimits.ResetAll() })
 
 	for i := 0; i < loginMaxFailures; i++ {
-		if code := loginAttempt(t, handler, "192.0.2.1:1234", "203.0.113.5", "", "alice", "wrong-password"); code != http.StatusUnauthorized {
+		if code := loginAttempt(t, handler, "192.0.2.1:1234", "203.0.113.5", "", "admin", "wrong-password"); code != http.StatusUnauthorized {
 			t.Fatalf("attempt %d: expected status 401, got %d", i+1, code)
 		}
 	}
@@ -311,7 +311,7 @@ func TestLoginLimiterIgnoresSpoofedForwardedFor(t *testing.T) {
 	t.Cleanup(func() { loginLimits.ResetAll() })
 
 	for i := 0; i < loginMaxFailures; i++ {
-		if code := loginAttempt(t, handler, "192.0.2.1:1234", "203.0.113.99, 203.0.113.5", "", "alice", "wrong-password"); code != http.StatusUnauthorized {
+		if code := loginAttempt(t, handler, "192.0.2.1:1234", "203.0.113.99, 203.0.113.5", "", "admin", "wrong-password"); code != http.StatusUnauthorized {
 			t.Fatalf("attempt %d: expected status 401, got %d", i+1, code)
 		}
 	}
@@ -397,6 +397,22 @@ func TestLoginLimiterTrustsIPv6ProxyCaseInsensitively(t *testing.T) {
 	}
 	if code := loginAttempt(t, handler, "[fd00::1]:1234", "203.0.113.6", "", "admin", "correct-password"); code != http.StatusOK {
 		t.Errorf("expected a different client behind the IPv6 proxy to log in, got %d", code)
+	}
+}
+
+func TestLoginLimiterTrustsZoneScopedIPv6Proxy(t *testing.T) {
+	t.Setenv("TRUSTED_PROXIES", "FE80::1%eth0")
+
+	handler := setupLoginHandler(t)
+	t.Cleanup(func() { loginLimits.ResetAll() })
+
+	for i := 0; i < loginMaxFailures; i++ {
+		if code := loginAttempt(t, handler, "[fe80::1%eth0]:1234", "203.0.113.5", "", "admin", "wrong-password"); code != http.StatusUnauthorized {
+			t.Fatalf("attempt %d: expected status 401, got %d", i+1, code)
+		}
+	}
+	if code := loginAttempt(t, handler, "[fe80::1%eth0]:1234", "203.0.113.6", "", "admin", "correct-password"); code != http.StatusOK {
+		t.Errorf("expected a different client behind the zone-scoped proxy to log in, got %d", code)
 	}
 }
 
