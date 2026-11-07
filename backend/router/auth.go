@@ -369,6 +369,10 @@ func (c *Auth) Login(w http.ResponseWriter, r *http.Request) {
 	}
 
 	loginLimits.Reset(key)
+	if err := utils.Session.RenewToken(r); err != nil {
+		utils.ResponseError(w, err)
+		return
+	}
 	utils.Session.Set(r, "authenticated", true)
 	utils.ResponseSuccess(w, map[string]bool{
 		"authenticated": true,
@@ -376,7 +380,10 @@ func (c *Auth) Login(w http.ResponseWriter, r *http.Request) {
 }
 
 func (c *Auth) Logout(w http.ResponseWriter, r *http.Request) {
-	utils.Session.Clear(r)
+	if err := utils.Session.Destroy(r); err != nil {
+		utils.ResponseError(w, err)
+		return
+	}
 	utils.ResponseSuccess(w, true)
 }
 

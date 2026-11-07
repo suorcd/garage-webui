@@ -579,3 +579,155 @@ func TestLoginLimiterIgnoresProxySetAfterHandlerBuilt(t *testing.T) {
 		t.Errorf("expected the ingress IP to stay locked out, got %d", code)
 	}
 }
+
+func loginAndGetSessionCookie(t *testing.T, handler http.Handler, cookie string) string {
+	t.Helper()
+
+	req := httptest.NewRequest(http.MethodPost, "/auth/login", strings.NewReader(`{"username":"admin","password":"correct-password"}`))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Requested-With", "XMLHttpRequest")
+	req.RemoteAddr = "192.0.2.99:1234"
+	if cookie != "" {
+		req.AddCookie(&http.Cookie{Name: "session", Value: cookie})
+	}
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected login status 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	for _, c := range rec.Result().Cookies() {
+		if c.Name == "session" {
+			return c.Value
+		}
+	}
+	t.Fatal("expected a session cookie from login, got none")
+	return ""
+}
+
+func statusCodeWithSessionCookie(t *testing.T, handler http.Handler, path, cookie string) int {
+	t.Helper()
+
+	req := httptest.NewRequest(http.MethodGet, path, nil)
+	req.RemoteAddr = "192.0.2.99:1234"
+	if cookie != "" {
+		req.AddCookie(&http.Cookie{Name: "session", Value: cookie})
+	}
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	return rec.Code
+}
+
+func TestLoginRotatesSessionToken(t *testing.T) {
+	handler := setupLoginHandler(t)
+
+	first := loginAndGetSessionCookie(t, handler, "")
+	if first == "" {
+		t.Fatal("expected a session cookie from the first login")
+	}
+
+	second := loginAndGetSessionCookie(t, handler, first)
+	if second == "" {
+		t.Fatal("expected a session cookie from the second login")
+	}
+	if second == first {
+		t.Error("expected login to rotate the session token, got the same token")
+	}
+
+	if code := statusCodeWithSessionCookie(t, handler, "/auth/status", first); code != http.StatusUnauthorized {
+		t.Errorf("expected the old token to be rejected with 401, got %d", code)
+	}
+	if code := statusCodeWithSessionCookie(t, handler, "/auth/status", second); code != http.StatusOK {
+		t.Errorf("expected the new token to return 200, got %d", code)
+	}
+}
+
+func TestLogoutDestroysSessionToken(t *testing.T) {
+	handler := setupLoginHandler(t)
+
+	token := loginAndGetSessionCookie(t, handler, "")
+	if token == "" {
+		t.Fatal("expected a session cookie from login")
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/auth/logout", nil)
+	req.Header.Set("X-Requested-With", "XMLHttpRequest")
+	req.RemoteAddr = "192.0.2.99:1234"
+	req.AddCookie(&http.Cookie{Name: "session", Value: token})
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected logout status 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	var logoutCookie *http.Cookie
+	for _, c := range rec.Result().Cookies() {
+		if c.Name == "session" {
+			logoutCookie = c
+		}
+	}
+	if logoutCookie == nil {
+		t.Fatal("expected logout to set a session cookie")
+	}
+	if logoutCookie.Value == token {
+		t.Error("expected logout to destroy the session token, got the same token")
+	}
+	if logoutCookie.Value != "" && logoutCookie.MaxAge >= 0 {
+		t.Errorf("expected logout to delete or rotate the session cookie, got value %q with MaxAge %d", logoutCookie.Value, logoutCookie.MaxAge)
+	}
+
+	if code := statusCodeWithSessionCookie(t, handler, "/auth/status", token); code != http.StatusUnauthorized {
+		t.Errorf("expected the logged-out token to be rejected with 401, got %d", code)
+	}
+}
+
+func TestLoginSetsSecureCookie(t *testing.T) {
+	handler := setupLoginHandler(t)
+
+	req := httptest.NewRequest(http.MethodPost, "/auth/login", strings.NewReader(`{"username":"admin","password":"correct-password"}`))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Requested-With", "XMLHttpRequest")
+	req.RemoteAddr = "192.0.2.99:1234"
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected login status 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	setCookie := rec.Header().Get("Set-Cookie")
+	if !strings.Contains(setCookie, "; Secure") {
+		t.Errorf("expected the session cookie to be Secure, got %q", setCookie)
+	}
+	if !strings.Contains(setCookie, "; HttpOnly") {
+		t.Errorf("expected the session cookie to be HttpOnly, got %q", setCookie)
+	}
+	if !strings.Contains(setCookie, "; SameSite=Lax") {
+		t.Errorf("expected the session cookie to be SameSite=Lax, got %q", setCookie)
+	}
+}
+
+func TestLoginCookieSecureCanBeDisabled(t *testing.T) {
+	t.Setenv("SESSION_COOKIE_SECURE", "false")
+
+	handler := setupLoginHandler(t)
+
+	req := httptest.NewRequest(http.MethodPost, "/auth/login", strings.NewReader(`{"username":"admin","password":"correct-password"}`))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Requested-With", "XMLHttpRequest")
+	req.RemoteAddr = "192.0.2.99:1234"
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected login status 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	setCookie := rec.Header().Get("Set-Cookie")
+	if strings.Contains(setCookie, "; Secure") {
+		t.Errorf("expected the session cookie to skip Secure when disabled, got %q", setCookie)
+	}
+}
+
