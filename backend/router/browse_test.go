@@ -226,15 +226,16 @@ func testBrowseMux() *http.ServeMux {
 func TestGetOneObjectViewServesSafeTypesInline(t *testing.T) {
 	fake := &fakeS3{
 		contentTypes: map[string]string{
-			"photo.png": "image/png",
-			"note.txt":  "text/plain",
-			"doc.pdf":   "application/pdf",
+			"photo.png":  "image/png",
+			"note.txt":   "text/plain",
+			"doc.pdf":    "application/pdf",
+			"photo2.png": "image/png; charset=binary",
 		},
 	}
 	newFakeS3Server(t, fake)
 	seedReadBucketAccess(t)
 
-	for _, key := range []string{"photo.png", "note.txt", "doc.pdf"} {
+	for _, key := range []string{"photo.png", "note.txt", "doc.pdf", "photo2.png"} {
 		t.Run(key, func(t *testing.T) {
 			req := httptest.NewRequest(http.MethodGet, "/browse/test-bucket/"+key+"?view=1", nil)
 			rec := httptest.NewRecorder()
@@ -254,15 +255,17 @@ func TestGetOneObjectViewServesSafeTypesInline(t *testing.T) {
 func TestGetOneObjectViewForcesAttachmentForUnsafeTypes(t *testing.T) {
 	fake := &fakeS3{
 		contentTypes: map[string]string{
-			"page.html": "text/html",
-			"pic.svg":   "image/svg+xml",
-			"blob.bin":  "application/octet-stream",
+			"page.html":  "text/html",
+			"pic.svg":    "image/svg+xml",
+			"blob.bin":   "application/octet-stream",
+			"page2.html": "text/html; charset=utf-8",
+			"PAGE.HTML":  "TEXT/HTML",
 		},
 	}
 	newFakeS3Server(t, fake)
 	seedReadBucketAccess(t)
 
-	for _, key := range []string{"page.html", "pic.svg", "blob.bin"} {
+	for _, key := range []string{"page.html", "pic.svg", "blob.bin", "page2.html", "PAGE.HTML"} {
 		t.Run(key, func(t *testing.T) {
 			req := httptest.NewRequest(http.MethodGet, "/browse/test-bucket/"+key+"?view=1", nil)
 			rec := httptest.NewRecorder()
