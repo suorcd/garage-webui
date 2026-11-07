@@ -132,7 +132,7 @@ files only.
 
 ### Configuration
 
-To simplify installation, the Garage Web UI uses values from the Garage configuration, such as `rpc_public_addr`, `admin.admin_token`, `s3_web.root_domain`, etc.
+To simplify installation, the Garage Web UI uses values from the Garage configuration, such as `rpc_public_addr`, `admin.admin_token`, `s3_web.root_domain`, etc. The browser receives only the `s3_web` bind address and root domain from `GET /config`. The admin token stays in the backend.
 
 Example content of `config.toml`:
 
