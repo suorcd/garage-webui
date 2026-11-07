@@ -140,14 +140,17 @@ func (g *garage) Fetch(url string, options *FetchOptions) ([]byte, error) {
 	// Add auth token
 	req.Header.Add("Authorization", fmt.Sprintf("Bearer %s", g.GetAdminKey()))
 
-	if options.Body != nil {
-		req.Header.Set("Content-Type", "application/json")
-	}
-
 	if options.Headers != nil {
 		for k, v := range options.Headers {
 			req.Header.Add(k, v)
 		}
+	}
+
+	// The body is always JSON, so the JSON type wins over a caller header.
+	// Set runs after the caller headers so a caller Content-Type cannot
+	// leave the request with two values.
+	if options.Body != nil {
+		req.Header.Set("Content-Type", "application/json")
 	}
 
 	client := &http.Client{}
