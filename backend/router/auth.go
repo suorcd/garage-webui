@@ -152,6 +152,12 @@ func trustedProxy(ip string) bool {
 			}
 			continue
 		}
+		if parsed := net.ParseIP(entry); parsed != nil {
+			if ipParsed := net.ParseIP(ip); ipParsed != nil && parsed.Equal(ipParsed) {
+				return true
+			}
+			continue
+		}
 		if entry == ip {
 			return true
 		}
@@ -182,7 +188,7 @@ func (c *Auth) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	key := loginLimitKey(ip, body.Username)
+	key := loginLimitKey(ip, strings.TrimSpace(body.Username))
 	if !loginLimits.Allow(key) {
 		seconds := int(loginLimits.RetryAfter(key).Seconds())
 		if seconds < 1 {

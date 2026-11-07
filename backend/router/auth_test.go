@@ -234,7 +234,7 @@ func setupLoginHandler(t *testing.T) http.Handler {
 	return newTestAPIHandler()
 }
 
-func loginAttempt(t *testing.T, handler http.Handler, remoteAddr, forwardedFor, username, password string) int {
+func loginAttempt(t *testing.T, handler http.Handler, remoteAddr, forwardedFor, realIP, username, password string) int {
 	t.Helper()
 
 	body := fmt.Sprintf(`{"username":%q,"password":%q}`, username, password)
@@ -247,6 +247,9 @@ func loginAttempt(t *testing.T, handler http.Handler, remoteAddr, forwardedFor, 
 	if forwardedFor != "" {
 		req.Header.Set("X-Forwarded-For", forwardedFor)
 	}
+	if realIP != "" {
+		req.Header.Set("X-Real-IP", realIP)
+	}
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
 	return rec.Code
@@ -257,14 +260,14 @@ func TestLoginLimiterKeysOnUsername(t *testing.T) {
 	t.Cleanup(func() { loginLimits.ResetAll() })
 
 	for i := 0; i < loginMaxFailures; i++ {
-		if code := loginAttempt(t, handler, "192.0.2.1:1234", "", "alice", "wrong-password"); code != http.StatusUnauthorized {
+		if code := loginAttempt(t, handler, "192.0.2.1:1234", "", "", "alice", "wrong-password"); code != http.StatusUnauthorized {
 			t.Fatalf("attempt %d: expected status 401, got %d", i+1, code)
 		}
 	}
-	if code := loginAttempt(t, handler, "192.0.2.1:1234", "", "alice", "wrong-password"); code != http.StatusTooManyRequests {
+	if code := loginAttempt(t, handler, "192.0.2.1:1234", "", "", "alice", "wrong-password"); code != http.StatusTooManyRequests {
 		t.Errorf("expected a sixth alice attempt to be rate limited, got %d", code)
 	}
-	if code := loginAttempt(t, handler, "192.0.2.1:1234", "", "admin", "correct-password"); code != http.StatusOK {
+	if code := loginAttempt(t, handler, "192.0.2.1:1234", "", "", "admin", "correct-password"); code != http.StatusOK {
 		t.Errorf("expected admin to log in from the same IP, got %d", code)
 	}
 }
@@ -276,11 +279,11 @@ func TestLoginLimiterTrustsForwardedForFromTrustedProxy(t *testing.T) {
 	t.Cleanup(func() { loginLimits.ResetAll() })
 
 	for i := 0; i < loginMaxFailures; i++ {
-		if code := loginAttempt(t, handler, "192.0.2.1:1234", "203.0.113.5", "alice", "wrong-password"); code != http.StatusUnauthorized {
+		if code := loginAttempt(t, handler, "192.0.2.1:1234", "203.0.113.5", "", "alice", "wrong-password"); code != http.StatusUnauthorized {
 			t.Fatalf("attempt %d: expected status 401, got %d", i+1, code)
 		}
 	}
-	if code := loginAttempt(t, handler, "192.0.2.1:1234", "203.0.113.6", "admin", "correct-password"); code != http.StatusOK {
+	if code := loginAttempt(t, handler, "192.0.2.1:1234", "203.0.113.6", "", "admin", "correct-password"); code != http.StatusOK {
 		t.Errorf("expected a different client behind the proxy to log in, got %d", code)
 	}
 }
@@ -292,11 +295,11 @@ func TestLoginLimiterIgnoresForwardedForFromUntrustedProxy(t *testing.T) {
 	// Same username for the failures and the login: only the X-Forwarded-For
 	// value differs, so a trusted header would split the bucket.
 	for i := 0; i < loginMaxFailures; i++ {
-		if code := loginAttempt(t, handler, "192.0.2.1:1234", "203.0.113.5", "admin", "wrong-password"); code != http.StatusUnauthorized {
+		if code := loginAttempt(t, handler, "192.0.2.1:1234", "203.0.113.5", "", "admin", "wrong-password"); code != http.StatusUnauthorized {
 			t.Fatalf("attempt %d: expected status 401, got %d", i+1, code)
 		}
 	}
-	if code := loginAttempt(t, handler, "192.0.2.1:1234", "203.0.113.6", "admin", "correct-password"); code != http.StatusTooManyRequests {
+	if code := loginAttempt(t, handler, "192.0.2.1:1234", "203.0.113.6", "", "admin", "correct-password"); code != http.StatusTooManyRequests {
 		t.Errorf("expected the ingress IP to stay locked out, got %d", code)
 	}
 }
@@ -308,12 +311,92 @@ func TestLoginLimiterIgnoresSpoofedForwardedFor(t *testing.T) {
 	t.Cleanup(func() { loginLimits.ResetAll() })
 
 	for i := 0; i < loginMaxFailures; i++ {
-		if code := loginAttempt(t, handler, "192.0.2.1:1234", "203.0.113.99, 203.0.113.5", "alice", "wrong-password"); code != http.StatusUnauthorized {
+		if code := loginAttempt(t, handler, "192.0.2.1:1234", "203.0.113.99, 203.0.113.5", "", "alice", "wrong-password"); code != http.StatusUnauthorized {
 			t.Fatalf("attempt %d: expected status 401, got %d", i+1, code)
 		}
 	}
-	if code := loginAttempt(t, handler, "192.0.2.1:1234", "203.0.113.99, 203.0.113.6", "admin", "correct-password"); code != http.StatusOK {
+	if code := loginAttempt(t, handler, "192.0.2.1:1234", "203.0.113.99, 203.0.113.6", "", "admin", "correct-password"); code != http.StatusOK {
 		t.Errorf("expected a different client behind the proxy to log in, got %d", code)
+	}
+}
+
+func TestLoginLimiterSharesBudgetAcrossWhitespaceUsernames(t *testing.T) {
+	handler := setupLoginHandler(t)
+	t.Cleanup(func() { loginLimits.ResetAll() })
+
+	// The credential check trims the username, so " admin" and "admin" are
+	// the same account. Their failures must share one budget.
+	for i := 0; i < loginMaxFailures; i++ {
+		if code := loginAttempt(t, handler, "192.0.2.1:1234", "", "", " admin", "wrong-password"); code != http.StatusUnauthorized {
+			t.Fatalf("attempt %d: expected status 401, got %d", i+1, code)
+		}
+	}
+	if code := loginAttempt(t, handler, "192.0.2.1:1234", "", "", "admin", "wrong-password"); code != http.StatusTooManyRequests {
+		t.Errorf("expected a sixth attempt as admin to be rate limited, got %d", code)
+	}
+}
+
+func TestLoginLimiterTrustsCIDRProxy(t *testing.T) {
+	t.Setenv("TRUSTED_PROXIES", "192.0.2.0/24")
+
+	handler := setupLoginHandler(t)
+	t.Cleanup(func() { loginLimits.ResetAll() })
+
+	for i := 0; i < loginMaxFailures; i++ {
+		if code := loginAttempt(t, handler, "192.0.2.1:1234", "203.0.113.5", "", "admin", "wrong-password"); code != http.StatusUnauthorized {
+			t.Fatalf("attempt %d: expected status 401, got %d", i+1, code)
+		}
+	}
+	if code := loginAttempt(t, handler, "192.0.2.1:1234", "203.0.113.6", "", "admin", "correct-password"); code != http.StatusOK {
+		t.Errorf("expected a different client behind the CIDR proxy to log in, got %d", code)
+	}
+}
+
+func TestLoginLimiterTrustsRealIPFromTrustedProxy(t *testing.T) {
+	t.Setenv("TRUSTED_PROXIES", "192.0.2.1")
+
+	handler := setupLoginHandler(t)
+	t.Cleanup(func() { loginLimits.ResetAll() })
+
+	for i := 0; i < loginMaxFailures; i++ {
+		if code := loginAttempt(t, handler, "192.0.2.1:1234", "", "203.0.113.5", "admin", "wrong-password"); code != http.StatusUnauthorized {
+			t.Fatalf("attempt %d: expected status 401, got %d", i+1, code)
+		}
+	}
+	if code := loginAttempt(t, handler, "192.0.2.1:1234", "", "203.0.113.6", "admin", "correct-password"); code != http.StatusOK {
+		t.Errorf("expected a different client behind the proxy to log in, got %d", code)
+	}
+}
+
+func TestLoginLimiterTrustsMultiEntryProxyList(t *testing.T) {
+	t.Setenv("TRUSTED_PROXIES", "10.0.0.1, 192.0.2.1")
+
+	handler := setupLoginHandler(t)
+	t.Cleanup(func() { loginLimits.ResetAll() })
+
+	for i := 0; i < loginMaxFailures; i++ {
+		if code := loginAttempt(t, handler, "192.0.2.1:1234", "203.0.113.5", "", "admin", "wrong-password"); code != http.StatusUnauthorized {
+			t.Fatalf("attempt %d: expected status 401, got %d", i+1, code)
+		}
+	}
+	if code := loginAttempt(t, handler, "192.0.2.1:1234", "203.0.113.6", "", "admin", "correct-password"); code != http.StatusOK {
+		t.Errorf("expected a different client behind the proxy to log in, got %d", code)
+	}
+}
+
+func TestLoginLimiterTrustsIPv6ProxyCaseInsensitively(t *testing.T) {
+	t.Setenv("TRUSTED_PROXIES", "FD00::1")
+
+	handler := setupLoginHandler(t)
+	t.Cleanup(func() { loginLimits.ResetAll() })
+
+	for i := 0; i < loginMaxFailures; i++ {
+		if code := loginAttempt(t, handler, "[fd00::1]:1234", "203.0.113.5", "", "admin", "wrong-password"); code != http.StatusUnauthorized {
+			t.Fatalf("attempt %d: expected status 401, got %d", i+1, code)
+		}
+	}
+	if code := loginAttempt(t, handler, "[fd00::1]:1234", "203.0.113.6", "", "admin", "correct-password"); code != http.StatusOK {
+		t.Errorf("expected a different client behind the IPv6 proxy to log in, got %d", code)
 	}
 }
 
