@@ -656,6 +656,7 @@ const deleteObjectsMaxPerRequest = 10000
 func deleteDirectoryObjects(ctx context.Context, client *s3.Client, bucket, prefix string) (schema.DeleteObjectsResult, error) {
 	result := schema.DeleteObjectsResult{}
 	var continuationToken *string
+	attempted := 0
 
 	for {
 		objects, err := client.ListObjectsV2(ctx, &s3.ListObjectsV2Input{
@@ -677,6 +678,9 @@ func deleteDirectoryObjects(ctx context.Context, client *s3.Client, bucket, pref
 		}
 
 		if len(keys) > 0 {
+			// Count attempted objects, not successful deletes: a prefix
+			// whose deletes all fail must still trip the cap.
+			attempted += len(keys)
 			res, err := client.DeleteObjects(ctx, &s3.DeleteObjectsInput{
 				Bucket: aws.String(bucket),
 				Delete: &types.Delete{Objects: keys},
@@ -695,7 +699,7 @@ func deleteDirectoryObjects(ctx context.Context, client *s3.Client, bucket, pref
 			}
 		}
 
-		if result.Deleted >= deleteObjectsMaxPerRequest && objects.IsTruncated != nil && *objects.IsTruncated {
+		if attempted >= deleteObjectsMaxPerRequest && objects.IsTruncated != nil && *objects.IsTruncated {
 			result.Truncated = true
 			return result, nil
 		}

@@ -706,6 +706,43 @@ func TestGetObjectsSendsContinuationTokenOnlyWhenGiven(t *testing.T) {
 	}
 }
 
+func TestDeleteDirectoryObjectsCapsAtTenThousandWhenDeletesFail(t *testing.T) {
+	keys := make([]string, 10500)
+	failedKeys := make(map[string]bool, len(keys))
+	for i := range keys {
+		keys[i] = fmt.Sprintf("dir/object-%05d", i)
+		failedKeys[keys[i]] = true
+	}
+
+	fake := &fakeS3{keys: keys, failedKeys: failedKeys}
+	newFakeS3Server(t, fake)
+
+	req := httptest.NewRequest(http.MethodDelete, "/browse/test-bucket/dir/?recursive=true", nil)
+	rec := httptest.NewRecorder()
+	testBrowseMux().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	var result schema.DeleteObjectsResult
+	if err := json.Unmarshal(rec.Body.Bytes(), &result); err != nil {
+		t.Fatalf("cannot decode response: %v", err)
+	}
+	if result.Deleted != 0 {
+		t.Errorf("expected 0 deleted objects, got %d", result.Deleted)
+	}
+	if len(result.Errors) != 10000 {
+		t.Errorf("expected 10000 errors, got %d", len(result.Errors))
+	}
+	if !result.Truncated {
+		t.Error("expected truncated true when objects remain")
+	}
+	if fake.deleteCalls != 10 {
+		t.Errorf("expected 10 delete calls, got %d", fake.deleteCalls)
+	}
+}
+
 func TestDeleteDirectoryObjectsCapsAtTenThousand(t *testing.T) {
 	keys := make([]string, 10500)
 	for i := range keys {

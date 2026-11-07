@@ -18,6 +18,7 @@ type fakeGetAllGarage struct {
 	ids       []string
 	delays    map[string]time.Duration
 	errors    map[string]bool
+	malformed map[string]bool
 	inFlight  int
 	maxFlight int
 }
@@ -51,6 +52,11 @@ func (f *fakeGetAllGarage) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 		if f.errors[id] {
 			writeAliasError(w, http.StatusInternalServerError, "boom")
+			return
+		}
+		if f.malformed[id] {
+			w.Header().Set("Content-Type", "application/json")
+			w.Write([]byte(`{not json`))
 			return
 		}
 		w.Header().Set("Content-Type", "application/json")
@@ -132,6 +138,28 @@ func TestGetAllSurfacesPerBucketErrors(t *testing.T) {
 	for _, bucket := range buckets {
 		if bucket.ID == "bucket-b" && bucket.Error == "" {
 			t.Error("expected the failed bucket to carry an error")
+		}
+		if bucket.ID == "bucket-a" && bucket.Error != "" {
+			t.Errorf("expected the good bucket to carry no error, got %q", bucket.Error)
+		}
+	}
+}
+
+func TestGetAllSurfacesMalformedBucketBodies(t *testing.T) {
+	fake := &fakeGetAllGarage{
+		ids:       []string{"bucket-a", "bucket-b"},
+		malformed: map[string]bool{"bucket-b": true},
+	}
+	handler := newGetAllTestHandler(t, fake)
+
+	buckets := getAllBuckets(t, handler)
+
+	if len(buckets) != 2 {
+		t.Fatalf("expected 2 buckets, got %d", len(buckets))
+	}
+	for _, bucket := range buckets {
+		if bucket.ID == "bucket-b" && bucket.Error == "" {
+			t.Error("expected the malformed bucket to carry an error")
 		}
 		if bucket.ID == "bucket-a" && bucket.Error != "" {
 			t.Errorf("expected the good bucket to carry no error, got %q", bucket.Error)
