@@ -3,6 +3,7 @@ package utils
 import (
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 )
 
@@ -59,5 +60,121 @@ func TestFetchUsesTrimmedAdminEndpoint(t *testing.T) {
 
 	if requestPath != "/v2/ListBuckets" {
 		t.Errorf("expected path /v2/ListBuckets, got %q", requestPath)
+	}
+}
+
+func TestFetchReturnsStatusAndSnippetForNonJSONError(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/html")
+		w.WriteHeader(http.StatusBadGateway)
+		w.Write([]byte("<html><body>Bad Gateway</body></html>"))
+	}))
+	t.Cleanup(server.Close)
+
+	t.Setenv("API_BASE_URL", server.URL)
+	t.Setenv("API_ADMIN_KEY", "test-admin-key")
+
+	g := &garage{}
+	_, err := g.Fetch("/v2/ListBuckets", &FetchOptions{})
+	if err == nil {
+		t.Fatal("expected an error for a 502 response, got none")
+	}
+	if !strings.Contains(err.Error(), "502") {
+		t.Errorf("expected the error to name the status 502, got %q", err.Error())
+	}
+	if !strings.Contains(err.Error(), "Bad Gateway") {
+		t.Errorf("expected the error to include the body snippet, got %q", err.Error())
+	}
+}
+
+func TestFetchAcceptsNon200SuccessStatus(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	t.Cleanup(server.Close)
+
+	t.Setenv("API_BASE_URL", server.URL)
+	t.Setenv("API_ADMIN_KEY", "test-admin-key")
+
+	g := &garage{}
+	body, err := g.Fetch("/v2/ListBuckets", &FetchOptions{})
+	if err != nil {
+		t.Fatalf("expected no error for a 204 response, got %v", err)
+	}
+	if len(body) != 0 {
+		t.Errorf("expected an empty body for a 204 response, got %q", string(body))
+	}
+}
+
+func TestFetchTruncatesLongErrorBody(t *testing.T) {
+	marker := "MARKER-NEAR-THE-END"
+	body := strings.Repeat("x", 5000) + marker
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte(body))
+	}))
+	t.Cleanup(server.Close)
+
+	t.Setenv("API_BASE_URL", server.URL)
+	t.Setenv("API_ADMIN_KEY", "test-admin-key")
+
+	g := &garage{}
+	_, err := g.Fetch("/v2/ListBuckets", &FetchOptions{})
+	if err == nil {
+		t.Fatal("expected an error for a 500 response, got none")
+	}
+	if strings.Contains(err.Error(), marker) {
+		t.Errorf("expected the error body to be truncated before the marker, got a %d-byte error", len(err.Error()))
+	}
+	if !strings.Contains(err.Error(), "500") {
+		t.Errorf("expected the error to name the status 500, got %q", err.Error())
+	}
+}
+
+func TestFetchSendsJSONContentType(t *testing.T) {
+	var contentType string
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		contentType = r.Header.Get("Content-Type")
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`{}`))
+	}))
+	t.Cleanup(server.Close)
+
+	t.Setenv("API_BASE_URL", server.URL)
+	t.Setenv("API_ADMIN_KEY", "test-admin-key")
+
+	g := &garage{}
+	if _, err := g.Fetch("/v2/CreateBucket", &FetchOptions{
+		Method: http.MethodPost,
+		Body:   map[string]string{"globalAlias": "test"},
+	}); err != nil {
+		t.Fatalf("expected a successful request, got %v", err)
+	}
+
+	if contentType != "application/json" {
+		t.Errorf("expected Content-Type application/json, got %q", contentType)
+	}
+}
+
+func TestFetchSurfacesJSONErrorMessage(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte(`{"message": "boom"}`))
+	}))
+	t.Cleanup(server.Close)
+
+	t.Setenv("API_BASE_URL", server.URL)
+	t.Setenv("API_ADMIN_KEY", "test-admin-key")
+
+	g := &garage{}
+	_, err := g.Fetch("/v2/ListBuckets", &FetchOptions{})
+	if err == nil {
+		t.Fatal("expected an error for a 500 response, got none")
+	}
+	if !strings.Contains(err.Error(), "500") || !strings.Contains(err.Error(), "boom") {
+		t.Errorf("expected the error to name the status and the message, got %q", err.Error())
 	}
 }
