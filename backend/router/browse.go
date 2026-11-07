@@ -35,11 +35,12 @@ func (b *Browse) GetObjects(w http.ResponseWriter, r *http.Request) {
 		limit = 100
 	}
 
-	client, s3Bucket, err := getS3Client(bucket)
+	client, access, err := getS3Client(bucket, false)
 	if err != nil {
 		utils.ResponseError(w, err)
 		return
 	}
+	s3Bucket := access.S3Bucket
 
 	objects, err := client.ListObjectsV2(context.Background(), &s3.ListObjectsV2Input{
 		Bucket:            aws.String(s3Bucket),
@@ -91,11 +92,12 @@ func (b *Browse) GetOneObject(w http.ResponseWriter, r *http.Request) {
 	thumbnail := queryParams.Get("thumb") == "1"
 	download := queryParams.Get("dl") == "1"
 
-	client, s3Bucket, err := getS3Client(bucket)
+	client, access, err := getS3Client(bucket, false)
 	if err != nil {
 		utils.ResponseError(w, err)
 		return
 	}
+	s3Bucket := access.S3Bucket
 
 	if !view && !download && !thumbnail {
 		object, err := client.HeadObject(context.Background(), &s3.HeadObjectInput{
@@ -196,11 +198,12 @@ func (b *Browse) PutObject(w http.ResponseWriter, r *http.Request) {
 	key := r.PathValue("key")
 	isDirectory := strings.HasSuffix(key, "/")
 
-	client, s3Bucket, err := getS3Client(bucket)
+	client, access, err := getS3Client(bucket, true)
 	if err != nil {
 		utils.ResponseError(w, err)
 		return
 	}
+	s3Bucket := access.S3Bucket
 
 	reader, err := r.MultipartReader()
 	if err != nil {
@@ -399,11 +402,12 @@ func (b *Browse) DeleteObject(w http.ResponseWriter, r *http.Request) {
 	recursive := r.URL.Query().Get("recursive") == "true"
 	isDirectory := strings.HasSuffix(key, "/")
 
-	client, s3Bucket, err := getS3Client(bucket)
+	client, access, err := getS3Client(bucket, true)
 	if err != nil {
 		utils.ResponseError(w, err)
 		return
 	}
+	s3Bucket := access.S3Bucket
 
 	// Delete directory and its content
 	if isDirectory && recursive {
@@ -494,8 +498,13 @@ type bucketAccess struct {
 	Credentials aws.CredentialsProvider
 }
 
-func getBucketAccess(identifier string) (*bucketAccess, error) {
-	cacheKey := fmt.Sprintf("key:%s", identifier)
+func getBucketAccess(identifier string, needWrite bool) (*bucketAccess, error) {
+	mode := "read"
+	if needWrite {
+		mode = "write"
+	}
+
+	cacheKey := fmt.Sprintf("key:%s:%s", identifier, mode)
 	cacheData := utils.Cache.Get(cacheKey)
 	if cacheData != nil {
 		return cacheData.(*bucketAccess), nil
@@ -506,7 +515,7 @@ func getBucketAccess(identifier string) (*bucketAccess, error) {
 		return nil, err
 	}
 
-	key, err := selectBucketKey(bucket)
+	key, err := selectBucketKey(bucket, needWrite)
 	if err != nil {
 		return nil, err
 	}
@@ -601,14 +610,26 @@ func decodeBucket(body []byte) (*schema.Bucket, error) {
 	return &bucket, nil
 }
 
-func selectBucketKey(bucket *schema.Bucket) (*schema.KeyElement, error) {
+func selectBucketKey(bucket *schema.Bucket, needWrite bool) (*schema.KeyElement, error) {
 	for i := range bucket.Keys {
-		if bucket.Keys[i].Permissions.Read && bucket.Keys[i].Permissions.Write {
+		permissions := bucket.Keys[i].Permissions
+		if needWrite {
+			if permissions.Write || permissions.Owner {
+				return &bucket.Keys[i], nil
+			}
+			continue
+		}
+
+		if permissions.Read {
 			return &bucket.Keys[i], nil
 		}
 	}
 
-	return nil, errors.New("bucket has no key with read and write access")
+	if needWrite {
+		return nil, errors.New("bucket has no key with write or owner access")
+	}
+
+	return nil, errors.New("bucket has no key with read access")
 }
 
 func getS3BucketName(bucket *schema.Bucket, key *schema.KeyElement) (string, error) {
@@ -623,10 +644,10 @@ func getS3BucketName(bucket *schema.Bucket, key *schema.KeyElement) (string, err
 	return "", fmt.Errorf("bucket %s has no global alias and key %s has no local alias", bucket.ID, key.AccessKeyID)
 }
 
-func getS3Client(identifier string) (*s3.Client, string, error) {
-	access, err := getBucketAccess(identifier)
+func getS3Client(identifier string, needWrite bool) (*s3.Client, *bucketAccess, error) {
+	access, err := getBucketAccess(identifier, needWrite)
 	if err != nil {
-		return nil, "", fmt.Errorf("cannot use bucket %s: %w", identifier, err)
+		return nil, nil, fmt.Errorf("cannot use bucket %s: %w", identifier, err)
 	}
 
 	// Determine endpoint and whether to disable HTTPS
@@ -651,5 +672,5 @@ func getS3Client(identifier string) (*s3.Client, string, error) {
 		})
 	})
 
-	return client, access.S3Bucket, nil
+	return client, access, nil
 }

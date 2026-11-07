@@ -171,7 +171,7 @@ func newFakeS3Server(t *testing.T, fake *fakeS3) *httptest.Server {
 	t.Setenv("S3_REGION", "garage")
 
 	utils.InitCacheManager()
-	utils.Cache.Set("key:test-bucket", &bucketAccess{
+	utils.Cache.Set("key:test-bucket:write", &bucketAccess{
 		S3Bucket: "test-bucket",
 		Credentials: credentials.NewStaticCredentialsProvider(
 			"test-access-key",

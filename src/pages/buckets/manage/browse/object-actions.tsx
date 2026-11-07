@@ -6,7 +6,7 @@ import { useDeleteObject } from "./hooks";
 import { useBucketContext } from "../context";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { handleError } from "@/lib/utils";
+import { cn, handleError } from "@/lib/utils";
 import { API_URL } from "@/lib/api";
 import { shareDialog } from "./share-dialog";
 
@@ -20,6 +20,9 @@ const ObjectActions = ({ prefix = "", object, end }: Props) => {
   const { bucket, bucketName } = useBucketContext();
   const queryClient = useQueryClient();
   const isDirectory = object.objectKey.endsWith("/");
+  const canWrite = bucket.keys.some(
+    (key) => key.permissions.write || key.permissions.owner
+  );
 
   const deleteObject = useDeleteObject(bucket.id, {
     onSuccess: (data) => {
@@ -89,8 +92,20 @@ const ObjectActions = ({ prefix = "", object, end }: Props) => {
               <Share2 /> Share
             </Dropdown.Item>
             <Dropdown.Item
-              className="text-error bg-error/10"
-              onClick={onDelete}
+              className={cn(
+                "text-error bg-error/10",
+                !canWrite && "opacity-50 cursor-not-allowed"
+              )}
+              aria-disabled={!canWrite}
+              onClick={() => {
+                if (!canWrite) {
+                  toast.error(
+                    "A key with write access is required to delete objects."
+                  );
+                  return;
+                }
+                onDelete();
+              }}
             >
               <Trash /> Delete
             </Dropdown.Item>
