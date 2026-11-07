@@ -180,6 +180,7 @@ Configurable envs:
 - `API_ADMIN_KEY`: Admin API key.
 - `S3_REGION`: S3 Region.
 - `S3_ENDPOINT_URL`: S3 Endpoint url.
+- `MAX_UPLOAD_SIZE`: Maximum upload size in bytes. Defaults to 5368709120 (5 GiB). The backend streams the upload to S3 and does not use a temporary file.
 - `AUTH_USER_PASS`: The login in `username:password_hash` format. The server refuses to start when this value is empty, unless `AUTH_DISABLED=true`.
 - `AUTH_DISABLED`: Set to `true` to disable authentication for local development. The server logs a warning. Do not use this value in production.
 
