@@ -40,10 +40,14 @@ func (g *garage) LoadConfig() error {
 	return nil
 }
 
+func trimEndpoint(endpoint string) string {
+	return strings.TrimRight(endpoint, "/")
+}
+
 func (g *garage) GetAdminEndpoint() string {
 	endpoint := os.Getenv("API_BASE_URL")
 	if len(endpoint) > 0 {
-		return endpoint
+		return trimEndpoint(endpoint)
 	}
 
 	host := strings.Split(g.Config.RPCPublicAddr, ":")[0]
@@ -54,13 +58,13 @@ func (g *garage) GetAdminEndpoint() string {
 		endpoint = fmt.Sprintf("http://%s", endpoint)
 	}
 
-	return endpoint
+	return trimEndpoint(endpoint)
 }
 
 func (g *garage) GetS3Endpoint() string {
 	endpoint := os.Getenv("S3_ENDPOINT_URL")
 	if len(endpoint) > 0 {
-		return endpoint
+		return trimEndpoint(endpoint)
 	}
 
 	host := strings.Split(g.Config.RPCPublicAddr, ":")[0]
@@ -71,7 +75,7 @@ func (g *garage) GetS3Endpoint() string {
 		endpoint = fmt.Sprintf("http://%s", endpoint)
 	}
 
-	return endpoint
+	return trimEndpoint(endpoint)
 }
 
 func (g *garage) GetS3Region() string {
