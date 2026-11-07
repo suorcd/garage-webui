@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strconv"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -18,12 +19,13 @@ import (
 )
 
 type fakeS3 struct {
-	mu          sync.Mutex
-	keys        []string
-	deletedKeys []string
-	failedKeys  map[string]bool
-	listCalls   int
-	deleteCalls int
+	mu           sync.Mutex
+	keys         []string
+	deletedKeys  []string
+	failedKeys   map[string]bool
+	listCalls    int
+	deleteCalls  int
+	contentTypes map[string]string
 }
 
 type listBucketResult struct {
@@ -75,9 +77,26 @@ func (f *fakeS3) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		f.handleList(w, r)
 	case r.Method == http.MethodPost && r.URL.Query().Has("delete"):
 		f.handleDelete(w, r)
+	case r.Method == http.MethodGet:
+		f.handleGet(w, r)
 	default:
 		http.Error(w, "unexpected request", http.StatusBadRequest)
 	}
+}
+
+func (f *fakeS3) handleGet(w http.ResponseWriter, r *http.Request) {
+	key := strings.TrimPrefix(r.URL.Path, "/test-bucket/")
+	contentType := f.contentTypes[key]
+	if contentType == "" {
+		contentType = "application/octet-stream"
+	}
+
+	body := "hello"
+	w.Header().Set("Content-Type", contentType)
+	w.Header().Set("Content-Length", strconv.Itoa(len(body)))
+	w.Header().Set("Last-Modified", time.Now().UTC().Format(http.TimeFormat))
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write([]byte(body))
 }
 
 func (f *fakeS3) handleList(w http.ResponseWriter, r *http.Request) {
@@ -183,11 +202,117 @@ func newFakeS3Server(t *testing.T, fake *fakeS3) *httptest.Server {
 	return server
 }
 
+func seedReadBucketAccess(t *testing.T) {
+	t.Helper()
+
+	utils.Cache.Set("key:test-bucket:read", &bucketAccess{
+		S3Bucket: "test-bucket",
+		Credentials: credentials.NewStaticCredentialsProvider(
+			"test-access-key",
+			"test-secret-key",
+			"",
+		),
+	}, time.Hour)
+}
+
 func testBrowseMux() *http.ServeMux {
 	mux := http.NewServeMux()
 	browse := &Browse{}
 	mux.HandleFunc("DELETE /browse/{bucket}/{key...}", browse.DeleteObject)
+	mux.HandleFunc("GET /browse/{bucket}/{key...}", browse.GetOneObject)
 	return mux
+}
+
+func TestGetOneObjectViewServesSafeTypesInline(t *testing.T) {
+	fake := &fakeS3{
+		contentTypes: map[string]string{
+			"photo.png": "image/png",
+			"note.txt":  "text/plain",
+			"doc.pdf":   "application/pdf",
+		},
+	}
+	newFakeS3Server(t, fake)
+	seedReadBucketAccess(t)
+
+	for _, key := range []string{"photo.png", "note.txt", "doc.pdf"} {
+		t.Run(key, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet, "/browse/test-bucket/"+key+"?view=1", nil)
+			rec := httptest.NewRecorder()
+			testBrowseMux().ServeHTTP(rec, req)
+
+			if rec.Code != http.StatusOK {
+				t.Fatalf("expected status 200, got %d: %s", rec.Code, rec.Body.String())
+			}
+			if got := rec.Header().Get("Content-Disposition"); got != "" {
+				t.Errorf("expected no Content-Disposition for an inline type, got %q", got)
+			}
+			assertViewSecurityHeaders(t, rec)
+		})
+	}
+}
+
+func TestGetOneObjectViewForcesAttachmentForUnsafeTypes(t *testing.T) {
+	fake := &fakeS3{
+		contentTypes: map[string]string{
+			"page.html": "text/html",
+			"pic.svg":   "image/svg+xml",
+			"blob.bin":  "application/octet-stream",
+		},
+	}
+	newFakeS3Server(t, fake)
+	seedReadBucketAccess(t)
+
+	for _, key := range []string{"page.html", "pic.svg", "blob.bin"} {
+		t.Run(key, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet, "/browse/test-bucket/"+key+"?view=1", nil)
+			rec := httptest.NewRecorder()
+			testBrowseMux().ServeHTTP(rec, req)
+
+			if rec.Code != http.StatusOK {
+				t.Fatalf("expected status 200, got %d: %s", rec.Code, rec.Body.String())
+			}
+			if got := rec.Header().Get("Content-Disposition"); !strings.HasPrefix(got, "attachment") {
+				t.Errorf("expected Content-Disposition attachment, got %q", got)
+			}
+			assertViewSecurityHeaders(t, rec)
+		})
+	}
+}
+
+func TestGetOneObjectDownloadKeepsAttachment(t *testing.T) {
+	fake := &fakeS3{
+		contentTypes: map[string]string{
+			"photo.png": "image/png",
+		},
+	}
+	newFakeS3Server(t, fake)
+	seedReadBucketAccess(t)
+
+	req := httptest.NewRequest(http.MethodGet, "/browse/test-bucket/photo.png?dl=1", nil)
+	rec := httptest.NewRecorder()
+	testBrowseMux().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	if got := rec.Header().Get("Content-Disposition"); !strings.HasPrefix(got, "attachment") {
+		t.Errorf("expected Content-Disposition attachment, got %q", got)
+	}
+	assertViewSecurityHeaders(t, rec)
+}
+
+func assertViewSecurityHeaders(t *testing.T, rec *httptest.ResponseRecorder) {
+	t.Helper()
+
+	if got := rec.Header().Get("Content-Security-Policy"); got != "sandbox" {
+		t.Errorf("expected Content-Security-Policy sandbox, got %q", got)
+	}
+	if got := rec.Header().Get("X-Content-Type-Options"); got != "nosniff" {
+		t.Errorf("expected X-Content-Type-Options nosniff, got %q", got)
+	}
+	if got := rec.Header().Get("Cache-Control"); !strings.Contains(got, "private") {
+		t.Errorf("expected Cache-Control to contain private, got %q", got)
+	}
 }
 
 func TestDeleteObjectRecursiveDeletesAllPages(t *testing.T) {
