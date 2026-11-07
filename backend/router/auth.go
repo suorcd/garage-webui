@@ -164,7 +164,7 @@ func (c *Auth) Logout(w http.ResponseWriter, r *http.Request) {
 }
 
 func (c *Auth) GetStatus(w http.ResponseWriter, r *http.Request) {
-	isAuthenticated := true
+	isAuthenticated := false
 	authSession := utils.Session.Get(r, "authenticated")
 	enabled := false
 
