@@ -20,6 +20,7 @@ func HandleApiRouter() http.Handler {
 
 	buckets := &Buckets{}
 	router.HandleFunc("GET /buckets", buckets.GetAll)
+	router.HandleFunc("POST /v2/AllowBucketKey", buckets.AllowKey)
 
 	browse := &Browse{}
 	router.HandleFunc("GET /browse/{bucket}", browse.GetObjects)

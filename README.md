@@ -261,6 +261,8 @@ $ git clone https://github.com/khairul169/garage-webui.git
 $ cd garage-webui && pnpm install
 ```
 
+Run the frontend tests with `pnpm test`.
+
 ### Running
 
 Start both the client and server concurrently:
