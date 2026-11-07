@@ -1,6 +1,7 @@
 package utils
 
 import (
+	"strings"
 	"sync"
 	"time"
 )
@@ -46,4 +47,14 @@ func (c *CacheManager) Get(key string) interface{} {
 
 func (c *CacheManager) IsExpired(entry CacheEntry) bool {
 	return entry.expiresAt.Before(time.Now())
+}
+
+func (c *CacheManager) ClearPrefix(prefix string) {
+	c.cache.Range(func(key, _ interface{}) bool {
+		keyString, ok := key.(string)
+		if ok && strings.HasPrefix(keyString, prefix) {
+			c.cache.Delete(key)
+		}
+		return true
+	})
 }
