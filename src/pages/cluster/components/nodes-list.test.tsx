@@ -3,7 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { assignNodeDialog } from "../stores";
-import type { Node } from "../types";
+import type { GetClusterLayoutResult, Node } from "../types";
 
 const GB = 1000 ** 3;
 
@@ -18,7 +18,7 @@ const { apiGet, apiPost, revertMutate, layoutData, newLayoutData } =
         { id: "node-a", zone: "dc1", capacity: 5 * 1000 ** 3, tags: ["fast"] },
       ],
       stagedRoleChanges: [{ id: "node-a", remove: true }],
-    },
+    } as GetClusterLayoutResult,
     newLayoutData: {
       version: 4,
       roles: [],
@@ -57,7 +57,7 @@ vi.mock("sonner", () => ({
 
 import NodesList from "./nodes-list";
 
-const nodes = [
+const nodes: Node[] = [
   {
     id: "node-a",
     hostname: "alpha",
@@ -75,7 +75,7 @@ const nodes = [
     lastSeenSecsAgo: null,
     dataPartition: { available: 100, total: 1000 },
   },
-] as unknown as Node[];
+];
 
 function renderList(queryClient: QueryClient) {
   return render(
@@ -141,6 +141,27 @@ describe("NodesList", () => {
       capacity: 5 * GB,
       tags: ["fast"],
     });
+  });
+
+  it("prefills the staged role when re-assigning a non-removal staged node", async () => {
+    layoutData.stagedRoleChanges = [
+      { id: "node-a", remove: false, zone: "dc2", capacity: 2 * GB, tags: ["slow"] },
+    ];
+    try {
+      renderList(newClient());
+      await waitFor(() => expect(screen.getByText("node-a")).toBeTruthy());
+
+      fireEvent.click(screen.getAllByText("Assign")[0]);
+
+      expect(assignNodeDialog.store.getState().data).toEqual({
+        nodeId: "node-a",
+        zone: "dc2",
+        capacity: 2 * GB,
+        tags: ["slow"],
+      });
+    } finally {
+      layoutData.stagedRoleChanges = [{ id: "node-a", remove: true }];
+    }
   });
 
   it("sets the layout query data from the apply response", async () => {

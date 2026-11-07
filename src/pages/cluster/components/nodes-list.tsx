@@ -83,8 +83,7 @@ const NodesList = ({ nodes }: NodeListProps) => {
         const stagedChanges = data?.stagedRoleChanges?.find(
           (i) => i.id === item.id
         );
-        const isRemoval =
-          stagedChanges != null && "remove" in stagedChanges;
+        const isRemoval = stagedChanges?.remove === true;
         return {
           ...item,
           role: isRemoval

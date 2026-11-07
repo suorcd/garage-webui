@@ -29,8 +29,8 @@ export type GetStatusResult = {
 export type Node = {
   id: string;
   role?: Role | StagedRole;
-  addr: string;
-  hostname: string;
+  addr: string | null;
+  hostname: string | null;
   isUp: boolean;
   lastSeenSecsAgo: number | null;
   draining?: boolean;

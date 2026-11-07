@@ -25,8 +25,8 @@ export const useNodeInfo = () => {
         params: { node: "self" },
       }),
     select: (data) => ({
-      node: data.success?.["self"],
-      error: data.error?.["self"],
+      node: data?.success?.["self"],
+      error: data?.error?.["self"],
     }),
   });
 };
