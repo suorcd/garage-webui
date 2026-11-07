@@ -20,6 +20,9 @@ result-*
 # Local development data
 .dev/
 
+# Air live-reload output
+backend/tmp/
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
