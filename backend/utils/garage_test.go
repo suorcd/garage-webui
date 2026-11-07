@@ -257,3 +257,31 @@ func TestFetchTimesOutOnHungServer(t *testing.T) {
 	}
 }
 
+func TestFetchContextCancelsOnDisconnect(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		time.Sleep(500 * time.Millisecond)
+		w.Write([]byte(`{}`))
+	}))
+	t.Cleanup(server.Close)
+
+	t.Setenv("API_BASE_URL", server.URL)
+	t.Setenv("API_ADMIN_KEY", "test-admin-key")
+
+	g := &garage{}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	start := time.Now()
+	_, err := g.FetchContext(ctx, "/v2/ListBuckets", &FetchOptions{})
+	elapsed := time.Since(start)
+	if err == nil {
+		t.Fatal("expected a context error, got none")
+	}
+	if !errors.Is(err, context.Canceled) {
+		t.Errorf("expected a context.Canceled error, got %v", err)
+	}
+	if elapsed > 400*time.Millisecond {
+		t.Errorf("expected FetchContext to fail fast on a cancelled context, took %v", elapsed)
+	}
+}
+

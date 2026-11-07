@@ -2,6 +2,7 @@ package utils
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -113,6 +114,13 @@ const maxErrorBodyBytes = 4096
 var fetchTimeout = 30 * time.Second
 
 func (g *garage) Fetch(url string, options *FetchOptions) ([]byte, error) {
+	return g.FetchContext(context.Background(), url, options)
+}
+
+// FetchContext is Fetch with a request context. A cancelled context aborts
+// the request, so a disconnect cancels the call instead of waiting out the
+// client timeout.
+func (g *garage) FetchContext(ctx context.Context, url string, options *FetchOptions) ([]byte, error) {
 	var reqBody io.Reader
 	reqUrl := fmt.Sprintf("%s%s", g.GetAdminEndpoint(), url)
 	method := http.MethodGet
@@ -129,7 +137,7 @@ func (g *garage) Fetch(url string, options *FetchOptions) ([]byte, error) {
 		reqBody = bytes.NewBuffer(body)
 	}
 
-	req, err := http.NewRequest(method, reqUrl, reqBody)
+	req, err := http.NewRequestWithContext(ctx, method, reqUrl, reqBody)
 	if err != nil {
 		return nil, err
 	}
