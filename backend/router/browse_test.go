@@ -19,13 +19,15 @@ import (
 )
 
 type fakeS3 struct {
-	mu           sync.Mutex
-	keys         []string
-	deletedKeys  []string
-	failedKeys   map[string]bool
-	listCalls    int
-	deleteCalls  int
-	contentTypes map[string]string
+	mu               sync.Mutex
+	keys             []string
+	deletedKeys      []string
+	failedKeys       map[string]bool
+	listCalls        int
+	deleteCalls      int
+	contents         map[string][]byte
+	contentTypes     map[string]string
+	omitLastModified bool
 }
 
 type listBucketResult struct {
@@ -75,12 +77,12 @@ func (f *fakeS3) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	switch {
 	case r.Method == http.MethodGet && r.URL.Query().Get("list-type") == "2":
 		f.handleList(w, r)
+	case r.Method == http.MethodGet:
+		f.handleGet(w, r)
 	case r.Method == http.MethodPost && r.URL.Query().Has("delete"):
 		f.handleDelete(w, r)
 	case r.Method == http.MethodHead:
 		f.handleHead(w, r)
-	case r.Method == http.MethodGet:
-		f.handleGet(w, r)
 	default:
 		http.Error(w, "unexpected request", http.StatusBadRequest)
 	}
@@ -101,8 +103,13 @@ func (f *fakeS3) handleHead(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprint(w, `<?xml version="1.0" encoding="UTF-8"?><Error><Code>NoSuchKey</Code><Message>The specified key does not exist.</Message></Error>`)
 }
 
+// handleGet serves three suites from one fake: the truncated body from #92,
+// the content-type map from #96, and the contents/omitLastModified knobs
+// from #103.
 func (f *fakeS3) handleGet(w http.ResponseWriter, r *http.Request) {
-	key := strings.TrimPrefix(r.URL.Path, "/test-bucket/")
+	key := strings.TrimPrefix(r.URL.Path, "/")
+	key = strings.TrimPrefix(key, "test-bucket/")
+
 	if key == "truncated.txt" {
 		w.Header().Set("Content-Type", "application/octet-stream")
 		w.Header().Set("Content-Length", "100")
@@ -112,17 +119,32 @@ func (f *fakeS3) handleGet(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	contentType := f.contentTypes[key]
+	f.mu.Lock()
+	defer f.mu.Unlock()
+
+	body, ok := f.contents[key]
+	contentType, typed := f.contentTypes[key]
+	if !ok {
+		// #96's tests describe the object by content type only.
+		if !typed {
+			w.Header().Set("Content-Type", "application/xml")
+			w.WriteHeader(http.StatusNotFound)
+			_, _ = w.Write([]byte(`<?xml version="1.0" encoding="UTF-8"?><Error><Code>NoSuchKey</Code><Message>not found</Message></Error>`))
+			return
+		}
+		body = []byte("hello")
+	}
+
 	if contentType == "" {
 		contentType = "application/octet-stream"
 	}
-
-	body := "hello"
+	if !f.omitLastModified {
+		w.Header().Set("Last-Modified", time.Now().UTC().Format(http.TimeFormat))
+	}
 	w.Header().Set("Content-Type", contentType)
 	w.Header().Set("Content-Length", strconv.Itoa(len(body)))
-	w.Header().Set("Last-Modified", time.Now().UTC().Format(http.TimeFormat))
 	w.WriteHeader(http.StatusOK)
-	_, _ = w.Write([]byte(body))
+	_, _ = w.Write(body)
 }
 
 func (f *fakeS3) handleList(w http.ResponseWriter, r *http.Request) {
@@ -216,6 +238,14 @@ func newFakeS3Server(t *testing.T, fake *fakeS3) *httptest.Server {
 	t.Setenv("S3_REGION", "garage")
 
 	utils.InitCacheManager()
+	utils.Cache.Set("key:test-bucket:read", &bucketAccess{
+		S3Bucket: "test-bucket",
+		Credentials: credentials.NewStaticCredentialsProvider(
+			"test-access-key",
+			"test-secret-key",
+			"",
+		),
+	}, time.Hour)
 	utils.Cache.Set("key:test-bucket:write", &bucketAccess{
 		S3Bucket: "test-bucket",
 		Credentials: credentials.NewStaticCredentialsProvider(
@@ -451,5 +481,77 @@ func TestDeleteObjectRecursiveReportsPartialFailures(t *testing.T) {
 	}
 	if result.Errors[0].Code != "AccessDenied" {
 		t.Errorf("expected AccessDenied, got %q", result.Errors[0].Code)
+	}
+}
+
+func downloadObject(t *testing.T, fake *fakeS3, target string) *httptest.ResponseRecorder {
+	t.Helper()
+
+	newFakeS3Server(t, fake)
+	req := httptest.NewRequest(http.MethodGet, target, nil)
+	rec := httptest.NewRecorder()
+	testBrowseMux().ServeHTTP(rec, req)
+	return rec
+}
+
+func TestGetOneObjectDownloadQuotesFilename(t *testing.T) {
+	fake := &fakeS3{contents: map[string][]byte{"my file.txt": []byte("hello")}}
+	rec := downloadObject(t, fake, "/browse/test-bucket/my%20file.txt?dl=1")
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	if got := rec.Header().Get("Content-Disposition"); got != `attachment; filename="my file.txt"` {
+		t.Errorf("expected a quoted filename, got %q", got)
+	}
+}
+
+func TestGetOneObjectDownloadEncodesNonASCIIFilename(t *testing.T) {
+	fake := &fakeS3{contents: map[string][]byte{"café.txt": []byte("hello")}}
+	rec := downloadObject(t, fake, "/browse/test-bucket/caf%C3%A9.txt?dl=1")
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	disposition := rec.Header().Get("Content-Disposition")
+	if !strings.Contains(disposition, "filename*=UTF-8''caf%C3%A9.txt") {
+		t.Errorf("expected an RFC 5987 filename, got %q", disposition)
+	}
+	if !strings.Contains(disposition, "filename=") {
+		t.Errorf("expected an ASCII fallback filename, got %q", disposition)
+	}
+}
+
+func TestGetOneObjectDownloadStripsControlCharacters(t *testing.T) {
+	fake := &fakeS3{contents: map[string][]byte{"a\"b\nc.txt": []byte("hello")}}
+	rec := downloadObject(t, fake, "/browse/test-bucket/a%22b%0Ac.txt?dl=1")
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	disposition := rec.Header().Get("Content-Disposition")
+	if strings.ContainsAny(disposition, "\r\n") {
+		t.Errorf("expected no CR or LF in the disposition, got %q", disposition)
+	}
+	if !strings.Contains(disposition, `filename="a\"bc.txt"`) {
+		t.Errorf("expected the quote escaped and the newline stripped, got %q", disposition)
+	}
+}
+
+func TestGetOneObjectDownloadWithoutLastModified(t *testing.T) {
+	fake := &fakeS3{
+		contents:         map[string][]byte{"a.txt": []byte("hello")},
+		omitLastModified: true,
+	}
+	rec := downloadObject(t, fake, "/browse/test-bucket/a.txt?dl=1")
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	if rec.Header().Get("Last-Modified") != "" {
+		t.Errorf("expected no Last-Modified header, got %q", rec.Header().Get("Last-Modified"))
+	}
+	if rec.Body.String() != "hello" {
+		t.Errorf("expected the object body, got %q", rec.Body.String())
 	}
 }

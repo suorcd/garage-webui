@@ -146,13 +146,15 @@ func (b *Browse) GetOneObject(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if download || !isSafeInlineContentType(contentType) {
-		w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%s", filename))
+		w.Header().Set("Content-Disposition", contentDisposition(filename))
 	}
 
 	w.Header().Set("Cache-Control", "private, max-age=86400")
 	w.Header().Set("Content-Security-Policy", "sandbox")
 	w.Header().Set("X-Content-Type-Options", "nosniff")
-	w.Header().Set("Last-Modified", object.LastModified.Format(time.RFC1123))
+	if object.LastModified != nil {
+		w.Header().Set("Last-Modified", object.LastModified.Format(time.RFC1123))
+	}
 	w.Header().Set("Content-Type", contentType)
 	if object.ContentLength != nil {
 		w.Header().Set("Content-Length", strconv.FormatInt(*object.ContentLength, 10))
@@ -521,6 +523,57 @@ func putFilePart(w http.ResponseWriter, ctx context.Context, client *s3.Client, 
 
 func uploadTooLargeError(limit int64) error {
 	return fmt.Errorf("upload is larger than the %d byte limit", limit)
+}
+
+// contentDisposition builds a safe attachment header for a download. It
+// strips control characters so a crafted key cannot inject header
+// parameters, quotes the ASCII fallback name, and adds an RFC 5987
+// filename* for non-ASCII names.
+func contentDisposition(filename string) string {
+	filename = strings.Map(func(r rune) rune {
+		if r < 0x20 || r == 0x7f {
+			return -1
+		}
+		return r
+	}, filename)
+	ascii := strings.Map(func(r rune) rune {
+		if r > 0x7f {
+			return '?'
+		}
+		return r
+	}, filename)
+	disposition := mime.FormatMediaType("attachment", map[string]string{"filename": ascii})
+	if disposition == "" {
+		return "attachment"
+	}
+	if ascii == filename {
+		return disposition
+	}
+	return disposition + "; filename*=UTF-8''" + rfc5987Encode(filename)
+}
+
+// rfc5987Encode percent-encodes a name per RFC 5987, keeping only the
+// attr-char set unescaped.
+func rfc5987Encode(s string) string {
+	var b strings.Builder
+	for _, c := range []byte(s) {
+		if isRFC5987AttrChar(c) {
+			b.WriteByte(c)
+		} else {
+			fmt.Fprintf(&b, "%%%02X", c)
+		}
+	}
+	return b.String()
+}
+
+func isRFC5987AttrChar(c byte) bool {
+	switch {
+	case c >= 'A' && c <= 'Z', c >= 'a' && c <= 'z', c >= '0' && c <= '9':
+		return true
+	case c == '!', c == '#', c == '$', c == '&', c == '+', c == '-', c == '.', c == '^', c == '_', c == '`', c == '|', c == '~':
+		return true
+	}
+	return false
 }
 
 func (b *Browse) DeleteObject(w http.ResponseWriter, r *http.Request) {
