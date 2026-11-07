@@ -40,7 +40,11 @@ const ManageBucketPage = () => {
   const { id } = useParams();
   const { data, error, isLoading, refetch } = useBucket(id);
 
-  const name = data?.globalAliases[0];
+  const globalName = data?.globalAliases?.[0];
+  const localName = data?.keys?.find(
+    (key) => key.permissions.read && key.permissions.write
+  )?.bucketLocalAliases?.[0];
+  const name = globalName || localName || data?.id?.substring(0, 8);
 
   return (
     <>
@@ -65,7 +69,7 @@ const ManageBucketPage = () => {
       {data && (
         <div className="container">
           <BucketContext.Provider
-            value={{ bucket: data, refetch, bucketName: name || "" }}
+            value={{ bucket: data, refetch, bucketName: globalName || "" }}
           >
             <TabView tabs={tabs} className="bg-base-100 h-14 px-1.5" />
           </BucketContext.Provider>

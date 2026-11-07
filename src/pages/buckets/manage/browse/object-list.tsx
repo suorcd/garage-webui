@@ -21,8 +21,8 @@ type Props = {
 };
 
 const ObjectList = ({ prefix, onPrefixChange }: Props) => {
-  const { bucketName } = useBucketContext();
-  const { data, error, isLoading } = useBrowseObjects(bucketName, {
+  const { bucket } = useBucketContext();
+  const { data, error, isLoading } = useBrowseObjects(bucket.id, {
     prefix,
     limit: 1000,
   });
@@ -33,6 +33,12 @@ const ObjectList = ({ prefix, onPrefixChange }: Props) => {
 
   return (
     <div className="overflow-x-auto min-h-[400px]">
+      {!bucket.globalAliases.length && data?.s3Bucket ? (
+        <p className="px-4 pt-2 text-sm text-base-content/60">
+          {`This bucket has no global alias. S3 requests use the local alias "${data.s3Bucket}".`}
+        </p>
+      ) : null}
+
       <Table>
         <Table.Head>
           <span>Name</span>
