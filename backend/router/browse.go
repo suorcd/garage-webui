@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"image"
 	"io"
 	"khairul169/garage-webui/schema"
 	"khairul169/garage-webui/utils"
@@ -99,7 +100,12 @@ func (b *Browse) GetOneObject(w http.ResponseWriter, r *http.Request) {
 	}
 	s3Bucket := access.S3Bucket
 
-	if !view && !download && !thumbnail {
+	if thumbnail {
+		writeThumbnail(w, r.Context(), client, s3Bucket, key)
+		return
+	}
+
+	if !view && !download {
 		object, err := client.HeadObject(context.Background(), &s3.HeadObjectInput{
 			Bucket: aws.String(s3Bucket),
 			Key:    aws.String(key),
@@ -132,23 +138,6 @@ func (b *Browse) GetOneObject(w http.ResponseWriter, r *http.Request) {
 
 	if download {
 		w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%s", keys[len(keys)-1]))
-	} else if thumbnail {
-		body, err := io.ReadAll(object.Body)
-		if err != nil {
-			utils.ResponseError(w, err)
-			return
-		}
-
-		thumb, err := utils.CreateThumbnailImage(body, 64, 64)
-		if err != nil {
-
-			utils.ResponseError(w, err)
-			return
-		}
-
-		w.Header().Set("Content-Type", "image/png")
-		w.Write(thumb)
-		return
 	}
 
 	w.Header().Set("Cache-Control", "max-age=86400")
@@ -172,6 +161,115 @@ func (b *Browse) GetOneObject(w http.ResponseWriter, r *http.Request) {
 		utils.ResponseError(w, err)
 		return
 	}
+}
+
+const (
+	defaultMaxThumbnailSize int64 = 5 << 20
+	maxThumbnailPixels      int64 = 16_000_000
+)
+
+var thumbnailPlaceholder = []byte(`<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64"><rect width="64" height="64" fill="#e5e7eb"/><path d="M18 46l10-12 7 9 5-6 6 9z" fill="#9ca3af"/><circle cx="22" cy="20" r="4" fill="#9ca3af"/></svg>`)
+
+func maxThumbnailSize() int64 {
+	value := utils.GetEnv("MAX_THUMBNAIL_SIZE", "")
+	if value == "" {
+		return defaultMaxThumbnailSize
+	}
+
+	size, err := strconv.ParseInt(value, 10, 64)
+	if err != nil || size <= 0 {
+		return defaultMaxThumbnailSize
+	}
+
+	return size
+}
+
+func writeThumbnail(w http.ResponseWriter, ctx context.Context, client *s3.Client, bucket, key string) {
+	head, err := client.HeadObject(ctx, &s3.HeadObjectInput{
+		Bucket: aws.String(bucket),
+		Key:    aws.String(key),
+	})
+	if err != nil {
+		writeThumbnailError(w, err)
+		return
+	}
+
+	limit := maxThumbnailSize()
+	if head.ContentLength != nil && *head.ContentLength > limit {
+		writeThumbnailPlaceholder(w)
+		return
+	}
+
+	etag := aws.ToString(head.ETag)
+	if etag == "" && head.LastModified != nil {
+		etag = head.LastModified.String()
+	}
+	cacheKey := fmt.Sprintf("thumb:%s:%s:%s", bucket, key, etag)
+	if cached := utils.Cache.Get(cacheKey); cached != nil {
+		if body, ok := cached.([]byte); ok {
+			writeThumbnailImage(w, body)
+			return
+		}
+	}
+
+	object, err := client.GetObject(ctx, &s3.GetObjectInput{
+		Bucket: aws.String(bucket),
+		Key:    aws.String(key),
+	})
+	if err != nil {
+		writeThumbnailError(w, err)
+		return
+	}
+	defer object.Body.Close()
+
+	body, err := io.ReadAll(io.LimitReader(object.Body, limit+1))
+	if err != nil {
+		writeThumbnailPlaceholder(w)
+		return
+	}
+	if int64(len(body)) > limit {
+		writeThumbnailPlaceholder(w)
+		return
+	}
+
+	config, _, err := image.DecodeConfig(bytes.NewReader(body))
+	if err != nil {
+		writeThumbnailPlaceholder(w)
+		return
+	}
+	if int64(config.Width)*int64(config.Height) > maxThumbnailPixels {
+		writeThumbnailPlaceholder(w)
+		return
+	}
+
+	thumb, err := utils.CreateThumbnailImage(body, 64, 64)
+	if err != nil {
+		writeThumbnailPlaceholder(w)
+		return
+	}
+
+	utils.Cache.Set(cacheKey, thumb, time.Hour)
+	writeThumbnailImage(w, thumb)
+}
+
+func writeThumbnailError(w http.ResponseWriter, err error) {
+	var ae smithy.APIError
+	if errors.As(err, &ae) && (ae.ErrorCode() == "NoSuchKey" || ae.ErrorCode() == "NotFound") {
+		utils.ResponseErrorStatus(w, err, http.StatusNotFound)
+		return
+	}
+
+	utils.ResponseError(w, err)
+}
+
+func writeThumbnailImage(w http.ResponseWriter, body []byte) {
+	w.Header().Set("Content-Type", "image/jpeg")
+	w.Write(body)
+}
+
+func writeThumbnailPlaceholder(w http.ResponseWriter) {
+	w.Header().Set("Content-Type", "image/svg+xml")
+	w.Write(thumbnailPlaceholder)
 }
 
 const (
