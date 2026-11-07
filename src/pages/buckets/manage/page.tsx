@@ -69,7 +69,11 @@ const ManageBucketPage = () => {
       {data && (
         <div className="container">
           <BucketContext.Provider
-            value={{ bucket: data, refetch, bucketName: globalName || "" }}
+            value={{
+              bucket: data,
+              refetch,
+              bucketName: globalName || localName || data?.id || "",
+            }}
           >
             <TabView tabs={tabs} className="bg-base-100 h-14 px-1.5" />
           </BucketContext.Provider>
