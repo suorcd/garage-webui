@@ -234,8 +234,7 @@ cannot tell "no test needed" from "no test written".
 - Nix: `nix build -L`.
 - Container: build the image and start it with `AUTH_DISABLED=true`.
 
-`.github/workflows/publish.yml` publishes `ghcr.io/suorcd/garage-webui` from `main` and
-version tags.
+`.github/workflows/publish.yml` publishes `ghcr.io/suorcd/garage-webui` for version tags.
 
 Keep the checks independent of a live Garage cluster. Run the test protocol above and put
 the output in the pull request.
