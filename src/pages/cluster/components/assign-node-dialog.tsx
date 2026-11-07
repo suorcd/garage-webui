@@ -149,7 +149,9 @@ const AssignNodeDialog = () => {
                     : null
                 }
                 options={zoneList}
-                onChange={({ value }: any) => field.onChange(value)}
+                onChange={(option) =>
+                  field.onChange((option as { value: string } | null)?.value)
+                }
               />
             )}
           />
@@ -162,7 +164,8 @@ const AssignNodeDialog = () => {
                 name="isGateway"
                 render={({ field }) => (
                   <Checkbox
-                    {...(field as any)}
+                    name={field.name}
+                    onBlur={field.onBlur}
                     checked={field.value}
                     onChange={(e) => field.onChange(e.target.checked)}
                     className="mr-2"
@@ -178,13 +181,31 @@ const AssignNodeDialog = () => {
               <FormControl
                 form={form}
                 name="capacity"
-                render={(field) => <Input type="number" {...(field as any)} />}
+                render={(field) => (
+                  <Input
+                    type="number"
+                    name={field.name}
+                    value={
+                      typeof field.value === "string" ||
+                      typeof field.value === "number"
+                        ? field.value
+                        : ""
+                    }
+                    onChange={(e) => field.onChange(e.target.value)}
+                    onBlur={field.onBlur}
+                  />
+                )}
               />
               <FormControl
                 form={form}
                 name="capacityUnit"
                 render={(field) => (
-                  <Select {...(field as any)}>
+                  <Select
+                    name={field.name}
+                    value={typeof field.value === "string" ? field.value : ""}
+                    onChange={(e) => field.onChange(e.target.value)}
+                    onBlur={field.onBlur}
+                  >
                     <option value="">Select Unit</option>
 
                     {capacityUnits.map((unit) => (

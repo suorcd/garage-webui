@@ -1,4 +1,4 @@
-import clsx from "clsx";
+import clsx, { type ClassValue } from "clsx";
 import { toast } from "sonner";
 import { twMerge } from "tailwind-merge";
 import dayjsRelativeTime from "dayjs/plugin/relativeTime";
@@ -8,7 +8,7 @@ import { BASE_PATH } from "./consts";
 dayjs.extend(dayjsRelativeTime);
 export { dayjs };
 
-export const cn = (...args: any[]) => {
+export const cn = (...args: ClassValue[]) => {
   return twMerge(clsx(...args));
 };
 

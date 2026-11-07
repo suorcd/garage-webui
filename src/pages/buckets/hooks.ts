@@ -15,7 +15,7 @@ export const useBuckets = () => {
 };
 
 export const useCreateBucket = (
-  options?: UseMutationOptions<any, Error, CreateBucketSchema>
+  options?: UseMutationOptions<unknown, Error, CreateBucketSchema>
 ) => {
   return useMutation({
     mutationFn: (body) => api.post("/v2/CreateBucket", { body }),
