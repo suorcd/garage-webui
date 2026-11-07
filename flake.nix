@@ -12,7 +12,13 @@
       nixpkgs,
       flake-utils,
     }:
-    flake-utils.lib.eachDefaultSystem (
+    let
+      systems = [
+        "x86_64-linux"
+        "aarch64-linux"
+      ];
+    in
+    flake-utils.lib.eachSystem systems (
       system:
       let
         pkgs = import nixpkgs { inherit system; };
@@ -47,6 +53,14 @@
             runHook postBuild
           '';
 
+          doCheck = true;
+
+          checkPhase = ''
+            runHook preCheck
+            pnpm run lint
+            runHook postCheck
+          '';
+
           installPhase = ''
             runHook preInstall
             mkdir -p $out
@@ -57,10 +71,24 @@
 
         # The Go backend, built in prod mode so the UI is embedded into the
         # binary via go:embed. The binary is the complete application.
-        clean = pkgs.writeShellScriptBin "clean" ''
-          export ROOT="$PWD"
-          exec ${pkgs.bash}/bin/bash ${./scripts/clean.sh} "$@"
-        '';
+        clean = pkgs.writeShellApplication {
+          name = "clean";
+          runtimeInputs = with pkgs; [
+            bash
+            coreutils
+            git
+          ];
+
+          text = ''
+            ROOT="$(git -C "$PWD" rev-parse --show-toplevel 2>/dev/null || echo "$PWD")"
+            if [ ! -f "$ROOT/package.json" ]; then
+              echo "error: clean must run inside the garage-webui repository" >&2
+              exit 1
+            fi
+            export ROOT
+            exec ${./scripts/clean.sh} "$@"
+          '';
+        };
 
         garage-webui = pkgs.buildGoModule {
           pname = "garage-webui";
@@ -70,7 +98,10 @@
           vendorHash = "sha256-7z6r6w/SbBlYYHMxm11xFl/QEYZc2KebnOJZRgYRUYk=";
           subPackages = [ "." ];
           tags = [ "prod" ];
-          env.GOTOOLCHAIN = "local";
+          env = {
+            CGO_ENABLED = "0";
+            GOTOOLCHAIN = "local";
+          };
 
           preBuild = ''
             mkdir -p ui/dist
@@ -79,6 +110,7 @@
 
           checkPhase = ''
             runHook preCheck
+            go vet ./...
             go test ./...
             runHook postCheck
           '';
@@ -88,7 +120,13 @@
             homepage = "https://github.com/khairul169/garage-webui";
             license = licenses.mit;
             mainProgram = "garage-webui";
-            platforms = platforms.unix;
+            maintainers = [
+              {
+                name = "suorcd";
+                email = "github@bobot.lol";
+              }
+            ];
+            platforms = platforms.linux;
           };
         };
       in
@@ -99,10 +137,13 @@
         };
 
         apps = {
-          default = flake-utils.lib.mkApp { drv = garage-webui; };
+          default = flake-utils.lib.mkApp { drv = garage-webui; } // {
+            meta.description = "Run the Garage Web UI";
+          };
           clean = {
             type = "app";
             program = "${clean}/bin/clean";
+            meta.description = "Remove local development state and build output";
           };
         };
 
@@ -126,10 +167,25 @@
           '';
         };
 
-        formatter = pkgs.nixfmt;
+        formatter = pkgs.writeShellApplication {
+          name = "nixfmt";
+          runtimeInputs = with pkgs; [
+            findutils
+            git
+            nixfmt
+          ];
+
+          text = ''
+            if [ "$#" -eq 0 ]; then
+              git ls-files -z '*.nix' | xargs -0 -r nixfmt
+            else
+              exec nixfmt "$@"
+            fi
+          '';
+        };
 
         checks = {
-          inherit garage-webui;
+          inherit frontend garage-webui;
         };
       }
     );

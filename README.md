@@ -123,6 +123,13 @@ The flake exposes `packages.default`, `packages.garage-webui`, and a
 development. Use `nix run .#clean` to remove build output and local
 development state (add `-- --deps` to remove `node_modules` as well).
 
+The flake supports `x86_64-linux` and `aarch64-linux`. The development shell
+includes Garage. Garage is not available on Darwin in nixpkgs, so the flake
+does not expose a Darwin development shell.
+
+Add new files to Git before `nix build`. The flake source contains tracked
+files only.
+
 ### Configuration
 
 To simplify installation, the Garage Web UI uses values from the Garage configuration, such as `rpc_public_addr`, `admin.admin_token`, `s3_web.root_domain`, etc.

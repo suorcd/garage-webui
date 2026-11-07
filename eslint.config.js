@@ -18,6 +18,8 @@ export default tseslint.config({
   },
   rules: {
     ...reactHooks.configs.recommended.rules,
+    // The API layer still uses `any`. Restore this rule to error in #20.
+    '@typescript-eslint/no-explicit-any': 'warn',
     'react-refresh/only-export-components': [
       'warn',
       { allowConstantExport: true },
