@@ -14,6 +14,7 @@ import (
 	"mime"
 	"mime/multipart"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -27,15 +28,25 @@ import (
 
 type Browse struct{}
 
+const (
+	browseDefaultLimit = 100
+	browseMaxLimit     = 1000
+)
+
 func (b *Browse) GetObjects(w http.ResponseWriter, r *http.Request) {
 	query := r.URL.Query()
 	bucket := r.PathValue("bucket")
 	prefix := query.Get("prefix")
 	continuationToken := query.Get("next")
 
-	limit, err := strconv.Atoi(query.Get("limit"))
-	if err != nil {
-		limit = 100
+	limit := browseDefaultLimit
+	if raw := query.Get("limit"); raw != "" {
+		parsed, err := strconv.Atoi(raw)
+		if err != nil {
+			utils.ResponseErrorStatus(w, fmt.Errorf("limit must be a number from 1 to %d", browseMaxLimit), http.StatusBadRequest)
+			return
+		}
+		limit = max(1, min(parsed, browseMaxLimit))
 	}
 
 	client, access, err := getS3Client(bucket, false)
@@ -45,13 +56,17 @@ func (b *Browse) GetObjects(w http.ResponseWriter, r *http.Request) {
 	}
 	s3Bucket := access.S3Bucket
 
-	objects, err := client.ListObjectsV2(context.Background(), &s3.ListObjectsV2Input{
-		Bucket:            aws.String(s3Bucket),
-		Prefix:            aws.String(prefix),
-		Delimiter:         aws.String("/"),
-		MaxKeys:           aws.Int32(int32(limit)),
-		ContinuationToken: aws.String(continuationToken),
-	})
+	input := &s3.ListObjectsV2Input{
+		Bucket:    aws.String(s3Bucket),
+		Prefix:    aws.String(prefix),
+		Delimiter: aws.String("/"),
+		MaxKeys:   aws.Int32(int32(limit)),
+	}
+	if continuationToken != "" {
+		input.ContinuationToken = aws.String(continuationToken)
+	}
+
+	objects, err := client.ListObjectsV2(context.Background(), input)
 
 	if err != nil {
 		utils.ResponseError(w, err)
@@ -66,11 +81,17 @@ func (b *Browse) GetObjects(w http.ResponseWriter, r *http.Request) {
 		S3Bucket:  s3Bucket,
 	}
 
-	for _, prefix := range objects.CommonPrefixes {
-		result.Prefixes = append(result.Prefixes, *prefix.Prefix)
+	for _, commonPrefix := range objects.CommonPrefixes {
+		if commonPrefix.Prefix == nil {
+			continue
+		}
+		result.Prefixes = append(result.Prefixes, *commonPrefix.Prefix)
 	}
 
 	for _, object := range objects.Contents {
+		if object.Key == nil {
+			continue
+		}
 		key := strings.TrimPrefix(*object.Key, prefix)
 		if key == "" {
 			continue
@@ -80,11 +101,21 @@ func (b *Browse) GetObjects(w http.ResponseWriter, r *http.Request) {
 			ObjectKey:    &key,
 			LastModified: object.LastModified,
 			Size:         object.Size,
-			Url:          fmt.Sprintf("/browse/%s/%s", bucket, *object.Key),
+			Url:          browseObjectURL(bucket, *object.Key),
 		})
 	}
 
 	utils.ResponseSuccess(w, result)
+}
+
+// browseObjectURL escapes each path segment, so keys with spaces, ?, #,
+// or non-ASCII characters keep working as links.
+func browseObjectURL(bucket, key string) string {
+	segments := strings.Split(key, "/")
+	for i, segment := range segments {
+		segments[i] = url.PathEscape(segment)
+	}
+	return fmt.Sprintf("/browse/%s/%s", url.PathEscape(bucket), strings.Join(segments, "/"))
 }
 
 func (b *Browse) GetOneObject(w http.ResponseWriter, r *http.Request) {
