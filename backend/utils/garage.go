@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/pelletier/go-toml/v2"
 )
@@ -107,6 +108,10 @@ type FetchOptions struct {
 // large, and only a snippet belongs in the returned error.
 const maxErrorBodyBytes = 4096
 
+// fetchTimeout bounds a Garage admin API call. Tests set it short to prove
+// a hung server fails fast. Production keeps the 30 second default.
+var fetchTimeout = 30 * time.Second
+
 func (g *garage) Fetch(url string, options *FetchOptions) ([]byte, error) {
 	var reqBody io.Reader
 	reqUrl := fmt.Sprintf("%s%s", g.GetAdminEndpoint(), url)
@@ -153,7 +158,7 @@ func (g *garage) Fetch(url string, options *FetchOptions) ([]byte, error) {
 		req.Header.Set("Content-Type", "application/json")
 	}
 
-	client := &http.Client{}
+	client := &http.Client{Timeout: fetchTimeout}
 	res, err := client.Do(req)
 	if err != nil {
 		return nil, err

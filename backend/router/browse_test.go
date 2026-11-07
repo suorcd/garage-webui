@@ -874,3 +874,51 @@ func TestDeleteDirectoryObjectsDeletesNineThousandNineHundredNinetyNine(t *testi
 		t.Errorf("expected 10 delete calls, got %d", fake.deleteCalls)
 	}
 }
+
+func cancelledRequest(t *testing.T, method, target string) *http.Request {
+	t.Helper()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	return httptest.NewRequest(method, target, nil).WithContext(ctx)
+}
+
+func TestGetObjectsCancelsWhenRequestContextEnds(t *testing.T) {
+	fake := &fakeS3{keys: []string{"a.txt"}}
+	newFakeS3Server(t, fake)
+
+	req := cancelledRequest(t, http.MethodGet, "/browse/test-bucket")
+	rec := httptest.NewRecorder()
+	testBrowseMux().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("expected status 500, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestGetOneObjectCancelsWhenRequestContextEnds(t *testing.T) {
+	fake := &fakeS3{keys: []string{"a.txt"}}
+	newFakeS3Server(t, fake)
+
+	req := cancelledRequest(t, http.MethodGet, "/browse/test-bucket/a.txt")
+	rec := httptest.NewRecorder()
+	testBrowseMux().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("expected status 500, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestDeleteObjectCancelsWhenRequestContextEnds(t *testing.T) {
+	fake := &fakeS3{keys: []string{"a.txt"}}
+	newFakeS3Server(t, fake)
+
+	req := cancelledRequest(t, http.MethodDelete, "/browse/test-bucket/a.txt")
+	rec := httptest.NewRecorder()
+	testBrowseMux().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("expected status 500, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+

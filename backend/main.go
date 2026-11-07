@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/joho/godotenv"
 )
@@ -58,7 +59,27 @@ func main() {
 	addr := fmt.Sprintf("%s:%s", host, port)
 	log.Printf("Starting server on http://%s", addr)
 
-	if err := http.ListenAndServe(addr, sessionMgr.LoadAndSave(mux)); err != nil {
+	if err := newHTTPServer(addr, sessionMgr.LoadAndSave(mux)).ListenAndServe(); err != nil {
 		log.Fatal(err)
+	}
+}
+
+// readHeaderTimeout and idleTimeout bound how long the server waits for
+// request headers and for the next request on a keep-alive connection.
+var (
+	readHeaderTimeout = 10 * time.Second
+	idleTimeout       = 120 * time.Second
+)
+
+// newHTTPServer builds the server with timeouts. ReadHeaderTimeout closes
+// connections that send no headers. IdleTimeout closes idle keep-alive
+// connections. WriteTimeout stays off: streaming downloads and ZIP
+// responses run longer than any fixed write budget.
+func newHTTPServer(addr string, handler http.Handler) *http.Server {
+	return &http.Server{
+		Addr:              addr,
+		Handler:           handler,
+		ReadHeaderTimeout: readHeaderTimeout,
+		IdleTimeout:       idleTimeout,
 	}
 }

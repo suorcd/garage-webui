@@ -230,3 +230,30 @@ func TestFetchSurfacesJSONErrorMessage(t *testing.T) {
 		t.Errorf("expected the error to name the status and the message, got %q", err.Error())
 	}
 }
+
+func TestFetchTimesOutOnHungServer(t *testing.T) {
+	oldTimeout := fetchTimeout
+	fetchTimeout = 50 * time.Millisecond
+	t.Cleanup(func() { fetchTimeout = oldTimeout })
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		time.Sleep(500 * time.Millisecond)
+		w.Write([]byte(`{}`))
+	}))
+	t.Cleanup(server.Close)
+
+	t.Setenv("API_BASE_URL", server.URL)
+	t.Setenv("API_ADMIN_KEY", "test-admin-key")
+
+	g := &garage{}
+	start := time.Now()
+	_, err := g.Fetch("/v2/ListBuckets", &FetchOptions{})
+	elapsed := time.Since(start)
+	if err == nil {
+		t.Fatal("expected a timeout error, got none")
+	}
+	if elapsed > 400*time.Millisecond {
+		t.Errorf("expected Fetch to fail fast on a hung server, took %v", elapsed)
+	}
+}
+

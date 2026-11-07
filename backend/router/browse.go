@@ -66,7 +66,7 @@ func (b *Browse) GetObjects(w http.ResponseWriter, r *http.Request) {
 		input.ContinuationToken = aws.String(continuationToken)
 	}
 
-	objects, err := client.ListObjectsV2(context.Background(), input)
+	objects, err := client.ListObjectsV2(r.Context(), input)
 
 	if err != nil {
 		utils.ResponseError(w, err)
@@ -139,7 +139,7 @@ func (b *Browse) GetOneObject(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if !view && !download {
-		object, err := client.HeadObject(context.Background(), &s3.HeadObjectInput{
+		object, err := client.HeadObject(r.Context(), &s3.HeadObjectInput{
 			Bucket: aws.String(s3Bucket),
 			Key:    aws.String(key),
 		})
@@ -151,7 +151,7 @@ func (b *Browse) GetOneObject(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	object, err := client.GetObject(context.Background(), &s3.GetObjectInput{
+	object, err := client.GetObject(r.Context(), &s3.GetObjectInput{
 		Bucket: aws.String(s3Bucket),
 		Key:    aws.String(key),
 	})
@@ -633,7 +633,7 @@ func (b *Browse) DeleteObject(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Delete single object
-	res, err := client.DeleteObject(context.Background(), &s3.DeleteObjectInput{
+	res, err := client.DeleteObject(r.Context(), &s3.DeleteObjectInput{
 		Bucket: aws.String(s3Bucket),
 		Key:    aws.String(key),
 	})
