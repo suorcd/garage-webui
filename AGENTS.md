@@ -227,15 +227,18 @@ cannot tell "no test needed" from "no test written".
 
 ## CI scope
 
-The repository has no CI configuration. `nix build` runs the Go tests in its `checkPhase`.
-Otherwise, verification is local and manual:
+`.github/workflows/ci.yml` runs these checks on every push and pull request:
 
-- `pnpm lint`, `pnpm test`, `pnpm build`, and `nix build` must pass before a merge.
-- `go vet ./...` and `go test ./...` must pass in `backend/` when the backend changed.
-- Run the test protocol above and put the output in the pull request.
+- Backend: `go vet ./...` and `go test ./...`.
+- Frontend: `pnpm install --frozen-lockfile`, `pnpm lint`, `pnpm test`, and `pnpm build`.
+- Nix: `nix build -L`.
+- Container: build the image and start it with `AUTH_DISABLED=true`.
 
-If you add CI, keep it to these commands. Do not make the default checks depend on a live
-Garage cluster.
+`.github/workflows/publish.yml` publishes `ghcr.io/suorcd/garage-webui` from `main` and
+version tags.
+
+Keep the checks independent of a live Garage cluster. Run the test protocol above and put
+the output in the pull request.
 
 ## Key constraints (do not break these silently)
 

@@ -26,6 +26,8 @@ $ docker run -p 3909:3909 -v ./garage.toml:/etc/garage.toml:ro --restart unless-
 
 The container does not start without `AUTH_USER_PASS`. See [Authentication](#authentication).
 
+CI publishes the fork image to `ghcr.io/suorcd/garage-webui` from `main` and version tags.
+
 ### Docker Compose
 
 If you install Garage using Docker, you can install this web UI alongside Garage as follows:
