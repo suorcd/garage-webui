@@ -42,8 +42,9 @@ export const parseCapacity = (value?: number | null) => {
 
   for (let i = capacityUnits.length - 1; i >= 0; i--) {
     if (value >= 1000 ** (i + 2)) {
+      const unitValue = value / 1000 ** (i + 2);
       return {
-        value: Math.floor(value / 1000 ** (i + 2)),
+        value: Number(unitValue.toFixed(3)),
         unit: capacityUnits[i],
       };
     }
