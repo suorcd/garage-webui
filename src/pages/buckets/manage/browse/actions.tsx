@@ -15,9 +15,10 @@ import { useEffect } from "react";
 
 type Props = {
   prefix: string;
+  canWrite: boolean;
 };
 
-const Actions = ({ prefix }: Props) => {
+const Actions = ({ prefix, canWrite }: Props) => {
   const { bucket } = useBucketContext();
   const queryClient = useQueryClient();
 
@@ -57,13 +58,18 @@ const Actions = ({ prefix }: Props) => {
 
   return (
     <>
-      <CreateFolderAction prefix={prefix} />
+      <CreateFolderAction prefix={prefix} canWrite={canWrite} />
       {/* <Button icon={FilePlus} color="ghost" /> */}
       <Button
         icon={UploadIcon}
         color="ghost"
-        title="Upload File"
+        title={
+          canWrite
+            ? "Upload File"
+            : "A key with write access is required to upload objects."
+        }
         onClick={onUploadFile}
+        disabled={!canWrite}
       />
       {/* <Button icon={EllipsisVertical} color="ghost" /> */}
     </>
@@ -72,9 +78,10 @@ const Actions = ({ prefix }: Props) => {
 
 type CreateFolderActionProps = {
   prefix: string;
+  canWrite: boolean;
 };
 
-const CreateFolderAction = ({ prefix }: CreateFolderActionProps) => {
+const CreateFolderAction = ({ prefix, canWrite }: CreateFolderActionProps) => {
   const { isOpen, onOpen, onClose } = useDisclosure();
   const { bucket } = useBucketContext();
   const queryClient = useQueryClient();
@@ -108,7 +115,12 @@ const CreateFolderAction = ({ prefix }: CreateFolderActionProps) => {
         icon={FolderPlus}
         color="ghost"
         onClick={onOpen}
-        title="Create Folder"
+        title={
+          canWrite
+            ? "Create Folder"
+            : "A key with write access is required to create folders."
+        }
+        disabled={!canWrite}
       />
 
       <Modal open={isOpen}>

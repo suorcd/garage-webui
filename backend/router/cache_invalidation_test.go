@@ -140,7 +140,7 @@ func TestKeyMutationsClearCredentialCache(t *testing.T) {
 		t.Run(testCase.name, func(t *testing.T) {
 			handler := newCacheTestHandler(t, &fakeCacheGarage{currentKey: "key-a"}, &fakeCacheS3{})
 
-			utils.Cache.Set("key:test-bucket", "cached", time.Hour)
+			utils.Cache.Set("key:test-bucket:read", "cached", time.Hour)
 			utils.Cache.Set("other", "keep", time.Hour)
 
 			var body io.Reader
@@ -160,7 +160,7 @@ func TestKeyMutationsClearCredentialCache(t *testing.T) {
 			if rec.Code != http.StatusOK {
 				t.Fatalf("expected status 200, got %d: %s", rec.Code, rec.Body.String())
 			}
-			if utils.Cache.Get("key:test-bucket") != nil {
+			if utils.Cache.Get("key:test-bucket:read") != nil {
 				t.Error("expected the credential cache entry to be removed")
 			}
 			if utils.Cache.Get("other") == nil {
