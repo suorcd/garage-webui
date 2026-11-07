@@ -435,6 +435,56 @@ func assertViewSecurityHeaders(t *testing.T, rec *httptest.ResponseRecorder) {
 	}
 }
 
+func TestGetObjectsCancelsCredentialFetchWhenRequestContextEnds(t *testing.T) {
+	fake := &fakeS3{keys: []string{"a.txt"}}
+	newFakeS3Server(t, fake)
+	// Drop the seeded credential cache so the handler must resolve
+	// credentials through the admin API.
+	utils.Cache.ClearPrefix("key:")
+
+	// The admin API answers slowly: a credential fetch that ignores the
+	// cancelled context would wait out the sleep before the S3 call fails.
+	admin := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		time.Sleep(500 * time.Millisecond)
+		w.Header().Set("Content-Type", "application/json")
+		switch r.URL.Path {
+		case "/v2/GetBucketInfo":
+			json.NewEncoder(w).Encode(schema.Bucket{
+				ID:            "test-bucket",
+				GlobalAliases: []string{"test-bucket"},
+				Keys: []schema.KeyElement{{
+					AccessKeyID: "test-access-key",
+					Permissions: schema.Permissions{Read: true},
+				}},
+			})
+		case "/v2/GetKeyInfo":
+			json.NewEncoder(w).Encode(schema.KeyElement{
+				AccessKeyID:     "test-access-key",
+				SecretAccessKey: "test-secret-key",
+			})
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	t.Cleanup(admin.Close)
+
+	t.Setenv("API_BASE_URL", admin.URL)
+	t.Setenv("API_ADMIN_KEY", "test-admin-key")
+
+	start := time.Now()
+	req := cancelledRequest(t, http.MethodGet, "/browse/test-bucket")
+	rec := httptest.NewRecorder()
+	testBrowseMux().ServeHTTP(rec, req)
+	elapsed := time.Since(start)
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("expected status 500, got %d: %s", rec.Code, rec.Body.String())
+	}
+	if elapsed > 400*time.Millisecond {
+		t.Errorf("expected the cancelled credential fetch to fail fast, took %v", elapsed)
+	}
+}
+
 func TestDeleteObjectRecursiveDeletesAllPages(t *testing.T) {
 	keys := make([]string, 1001)
 	for i := range keys {
