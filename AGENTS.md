@@ -241,12 +241,11 @@ Garage cluster.
 - **One API surface.** All Garage calls go through the Go backend. A browser request goes to
   `/api` on the same origin, and `src/lib/api.ts` is the only client. Do not add a
   client-side request to the Garage admin API.
-- **The admin token must not reach the browser. This rule is broken today.**
-  `backend/router/config.go` returns the whole `utils.Garage.Config` from `GET /config`, and
-  `src/hooks/useConfig.ts` fetches it. That response includes `admin.admin_token`,
-  `rpc_secret`, and `admin.metrics_token`. Do not add a new field from that config to the
-  UI, and do not treat the token as secret until the endpoint is corrected. The correction
-  is a separate security change with its own test.
+- **The admin token must not reach the browser.**
+  `backend/router/config.go` returns only `schema.ConfigResponse` from `GET /config`. The
+  response holds the `s3_web` bind address and root domain. The test in
+  `backend/router/config_test.go` asserts that the response has no secret field. Do not add
+  an internal config field to the response.
 - **Secrets.** Never commit a real Garage admin token, S3 key, or `.env` file.
   `.env.example` holds placeholders only. `.gitignore` ignores `.env*` and every
   `garage.toml` except `dev/garage.toml`.

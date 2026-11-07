@@ -1,5 +1,16 @@
 package schema
 
+// ConfigResponse is the public configuration that GET /config returns.
+// It must not contain a secret.
+type ConfigResponse struct {
+	S3Web PublicS3Web `json:"s3_web"`
+}
+
+type PublicS3Web struct {
+	BindAddr   string `json:"bind_addr"`
+	RootDomain string `json:"root_domain"`
+}
+
 type Config struct {
 	RPCBindAddr   string `json:"rpc_bind_addr" toml:"rpc_bind_addr"`
 	RPCPublicAddr string `json:"rpc_public_addr" toml:"rpc_public_addr"`
