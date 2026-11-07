@@ -11,6 +11,11 @@ export default {
   },
   plugins: [require("daisyui")],
   daisyui: {
-    themes: require("./src/app/themes").themes,
+    // Custom theme objects first, then the daisyUI built-in names. The
+    // `suorcd` theme is an object; the rest are names.
+    themes: [
+      ...require("./src/app/themes").customThemes,
+      ...require("./src/app/themes").themes,
+    ],
   },
 };
