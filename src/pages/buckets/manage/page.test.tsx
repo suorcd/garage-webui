@@ -83,4 +83,15 @@ describe("ManageBucketPage", () => {
 
     expect(screen.getByText("bucketName:b-noalias")).toBeTruthy();
   });
+
+  it("uses the local alias for bucketName when the bucket has no global alias", () => {
+    bucketData.keys[0].bucketLocalAliases = ["local-b"];
+    try {
+      renderPage();
+
+      expect(screen.getByText("bucketName:local-b")).toBeTruthy();
+    } finally {
+      bucketData.keys[0].bucketLocalAliases = [];
+    }
+  });
 });
