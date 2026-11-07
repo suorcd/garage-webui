@@ -1,6 +1,7 @@
 // https://daisyui.com/docs/themes/
 
 export const themes = [
+  "synthwave",
   "pastel",
   "dark",
   "dracula",

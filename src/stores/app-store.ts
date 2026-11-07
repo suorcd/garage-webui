@@ -9,7 +9,7 @@ type AppState = {
 const store = createStore(
   persist<AppState>(
     () => ({
-      theme: "pastel",
+      theme: "synthwave",
     }),
     {
       name: "appdata",
