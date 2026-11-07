@@ -17,11 +17,11 @@ type Props = {
 };
 
 const ObjectActions = ({ prefix = "", object, end }: Props) => {
-  const { bucketName } = useBucketContext();
+  const { bucket, bucketName } = useBucketContext();
   const queryClient = useQueryClient();
   const isDirectory = object.objectKey.endsWith("/");
 
-  const deleteObject = useDeleteObject(bucketName, {
+  const deleteObject = useDeleteObject(bucket.id, {
     onSuccess: (data) => {
       const result = data as DeleteObjectsResult;
       if (typeof result.deleted === "number") {
@@ -43,7 +43,7 @@ const ObjectActions = ({ prefix = "", object, end }: Props) => {
       } else {
         toast.success("Object deleted!");
       }
-      queryClient.invalidateQueries({ queryKey: ["browse", bucketName] });
+      queryClient.invalidateQueries({ queryKey: ["browse", bucket.id] });
     },
     onError: handleError,
   });
@@ -53,7 +53,7 @@ const ObjectActions = ({ prefix = "", object, end }: Props) => {
   };
 
   const onDelete = () => {
-    const objectPath = `${bucketName}/${prefix}${object.objectKey}`;
+    const objectPath = `${bucketName || bucket.id}/${prefix}${object.objectKey}`;
     if (
       window.confirm(
         isDirectory

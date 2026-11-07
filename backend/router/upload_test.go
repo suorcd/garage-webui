@@ -130,11 +130,14 @@ func newUploadS3Server(t *testing.T, fake *fakeUploadS3) *httptest.Server {
 	t.Setenv("S3_REGION", "garage")
 
 	utils.InitCacheManager()
-	utils.Cache.Set("key:test-bucket", credentials.NewStaticCredentialsProvider(
-		"test-access-key",
-		"test-secret-key",
-		"",
-	), time.Hour)
+	utils.Cache.Set("key:test-bucket", &bucketAccess{
+		S3Bucket: "test-bucket",
+		Credentials: credentials.NewStaticCredentialsProvider(
+			"test-access-key",
+			"test-secret-key",
+			"",
+		),
+	}, time.Hour)
 
 	return server
 }

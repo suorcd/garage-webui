@@ -9,6 +9,7 @@ export type GetObjectsResult = {
   objects: Object[];
   prefix: string;
   nextToken: string | null;
+  s3Bucket: string;
 };
 
 export type Object = {
