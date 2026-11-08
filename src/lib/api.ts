@@ -36,6 +36,10 @@ function errorMessage(data: unknown, res: Response): string {
   return `HTTP ${res.status}`;
 }
 
+// A request without a caller signal gets a deadline. Uploads get more time.
+const REQUEST_TIMEOUT_MS = 30_000;
+const UPLOAD_TIMEOUT_MS = 600_000;
+
 export class APIError extends Error {
   status!: number;
 
@@ -86,12 +90,26 @@ const api = {
       body = rawBody as BodyInit | null;
     }
 
-    const res = await fetch(_url, {
-      ...init,
-      credentials: "include",
-      headers: { ...headers, ...(extraHeaders || {}) },
-      body,
-    });
+    const isUpload = rawBody instanceof FormData;
+    const timeoutMs = isUpload ? UPLOAD_TIMEOUT_MS : REQUEST_TIMEOUT_MS;
+    const signal = init.signal ?? AbortSignal.timeout(timeoutMs);
+
+    let res: Response;
+    try {
+      res = await fetch(_url, {
+        ...init,
+        signal,
+        credentials: "include",
+        headers: { ...headers, ...(extraHeaders || {}) },
+        body,
+      });
+    } catch (error) {
+      const name = (error as { name?: unknown })?.name;
+      if (name === "AbortError" || name === "TimeoutError") {
+        throw new APIError("Request timed out", 408);
+      }
+      throw error;
+    }
 
     const isJson = res.headers
       .get("Content-Type")

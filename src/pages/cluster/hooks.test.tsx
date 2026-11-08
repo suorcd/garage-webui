@@ -1,6 +1,6 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { renderHook, waitFor } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ReactNode } from "react";
 
 const { apiGet } = vi.hoisted(() => ({
@@ -11,7 +11,15 @@ vi.mock("@/lib/api", () => ({
   default: { get: apiGet, post: vi.fn() },
 }));
 
-import { useNodeInfo } from "./hooks";
+import { useClusterLayout, useClusterStatus, useNodeInfo } from "./hooks";
+
+afterEach(() => {
+  vi.useRealTimers();
+});
+
+beforeEach(() => {
+  vi.clearAllMocks();
+});
 
 function wrapper({ children }: { children: ReactNode }) {
   const queryClient = new QueryClient({
@@ -61,5 +69,49 @@ describe("useNodeInfo", () => {
       node: undefined,
       error: "connection refused",
     });
+  });
+});
+
+describe("cluster refresh intervals", () => {
+  it("refetches cluster status every 30 seconds", async () => {
+    vi.useFakeTimers();
+    apiGet.mockResolvedValue({});
+    const { result } = renderHook(() => useClusterStatus(), { wrapper });
+
+    await vi.advanceTimersByTimeAsync(0);
+    expect(result.current.isSuccess).toBe(true);
+    expect(apiGet).toHaveBeenCalledTimes(1);
+
+    await vi.advanceTimersByTimeAsync(30_000);
+    expect(apiGet).toHaveBeenCalledTimes(2);
+  });
+
+  it("refetches cluster layout every 30 seconds", async () => {
+    vi.useFakeTimers();
+    apiGet.mockResolvedValue({});
+    const { result } = renderHook(() => useClusterLayout(), { wrapper });
+
+    await vi.advanceTimersByTimeAsync(0);
+    expect(result.current.isSuccess).toBe(true);
+    expect(apiGet).toHaveBeenCalledTimes(1);
+
+    await vi.advanceTimersByTimeAsync(30_000);
+    expect(apiGet).toHaveBeenCalledTimes(2);
+  });
+
+  it("does not refetch node info on an interval", async () => {
+    vi.useFakeTimers();
+    apiGet.mockResolvedValue({
+      success: { [nodeId]: nodeInfo },
+      error: {},
+    });
+    const { result } = renderHook(() => useNodeInfo(), { wrapper });
+
+    await vi.advanceTimersByTimeAsync(0);
+    expect(result.current.isSuccess).toBe(true);
+    expect(apiGet).toHaveBeenCalledTimes(1);
+
+    await vi.advanceTimersByTimeAsync(120_000);
+    expect(apiGet).toHaveBeenCalledTimes(1);
   });
 });
