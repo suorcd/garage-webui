@@ -111,13 +111,15 @@ const ObjectActions = ({ prefix = "", object, end }: Props) => {
           </Dropdown.Toggle>
 
           <Dropdown.Menu className="gap-y-1">
-            <Dropdown.Item
-              onClick={() =>
-                shareDialog.open({ key: object.objectKey, prefix })
-              }
-            >
-              <Share2 /> Share
-            </Dropdown.Item>
+            {!isDirectory && (
+              <Dropdown.Item
+                onClick={() =>
+                  shareDialog.open({ key: object.objectKey, prefix })
+                }
+              >
+                <Share2 /> Share
+              </Dropdown.Item>
+            )}
             <Dropdown.Item
               className={cn(
                 "text-error bg-error/10",

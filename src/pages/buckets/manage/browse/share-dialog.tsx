@@ -20,18 +20,20 @@ const ShareDialog = () => {
   const websitePort = config?.s3_web?.bind_addr?.split(":").pop() || "80";
   const rootDomain = config?.s3_web?.root_domain;
 
-  const domains = useMemo(
-    () => [
-      bucketName,
-      bucketName + rootDomain,
-      bucketName + rootDomain + `:${websitePort}`,
-    ],
-    [bucketName, config?.s3_web]
-  );
+  const domains = useMemo(() => {
+    const list = [bucketName];
+    if (rootDomain) {
+      list.push(bucketName + rootDomain);
+      list.push(bucketName + rootDomain + `:${websitePort}`);
+    }
+    return list;
+  }, [bucketName, rootDomain, websitePort]);
 
   useEffect(() => {
-    setDomain(bucketName);
-  }, [domains]);
+    if (!domains.includes(domain)) {
+      setDomain(bucketName);
+    }
+  }, [domains, domain, bucketName]);
 
   const url = "http://" + domain + "/" + data?.prefix + data?.key;
 
@@ -51,6 +53,7 @@ const ShareDialog = () => {
               key={item}
               label={item}
               checked={item === domain}
+              disabled={!config}
               onChange={() => setDomain(item)}
             />
           ))}

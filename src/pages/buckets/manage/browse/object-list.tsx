@@ -127,7 +127,7 @@ const ObjectList = ({ prefix, onPrefixChange }: Props) => {
             </tr>
           ) : null}
 
-          {prefixes.map((prefix) => (
+          {prefixes.map((prefix, idx) => (
             <tr
               key={prefix}
               className="hover:bg-neutral/60 hover:text-neutral-content group"
@@ -146,7 +146,13 @@ const ObjectList = ({ prefix, onPrefixChange }: Props) => {
                 </span>
               </td>
               <td colSpan={2} />
-              <ObjectActions object={{ objectKey: prefix, url: "" }} />
+              <ObjectActions
+                object={{ objectKey: prefix, url: "" }}
+                end={
+                  idx >= prefixes.length + objects.length - 2 &&
+                  prefixes.length + objects.length > 5
+                }
+              />
             </tr>
           ))}
 

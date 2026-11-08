@@ -1,4 +1,4 @@
-import { cleanup, render } from "@testing-library/react";
+import { cleanup, render, screen } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { toast } from "sonner";
@@ -41,7 +41,7 @@ vi.mock("sonner", () => ({
 
 import ObjectActions from "./object-actions";
 
-const renderObjectActions = () => {
+const renderObjectActions = (objectKey = "dir/", end?: boolean) => {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   });
@@ -53,7 +53,8 @@ const renderObjectActions = () => {
           <tr>
             <ObjectActions
               prefix=""
-              object={{ objectKey: "dir/", url: "/browse/bucket-1/dir/" }}
+              object={{ objectKey, url: `/browse/bucket-1/${objectKey}` }}
+              end={end}
             />
           </tr>
         </tbody>
@@ -61,6 +62,40 @@ const renderObjectActions = () => {
     </QueryClientProvider>
   );
 };
+
+describe("ObjectActions Share item", () => {
+  afterEach(cleanup);
+
+  it("hides Share for directory rows", () => {
+    renderObjectActions("dir/");
+
+    expect(screen.queryByText("Share")).toBeNull();
+  });
+
+  it("shows Share for file rows", () => {
+    renderObjectActions("file.txt");
+
+    expect(screen.getByText("Share")).toBeTruthy();
+  });
+
+  it("opens the dropdown upward when end is set", () => {
+    const { container } = renderObjectActions("dir/", true);
+
+    expect(
+      container.querySelector(".dropdown")?.classList.contains("dropdown-top")
+    ).toBe(true);
+  });
+
+  it("opens the dropdown downward when end is not set", () => {
+    const { container } = renderObjectActions("dir/");
+
+    expect(
+      container
+        .querySelector(".dropdown")
+        ?.classList.contains("dropdown-bottom")
+    ).toBe(true);
+  });
+});
 
 describe("ObjectActions recursive delete", () => {
   afterEach(cleanup);
