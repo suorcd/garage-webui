@@ -7,13 +7,16 @@ type AuthResponse = {
 };
 
 export const useAuth = () => {
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError, error, refetch } = useQuery({
     queryKey: ["auth"],
     queryFn: () => api.get<AuthResponse>("/auth/status"),
     retry: false,
   });
   return {
     isLoading,
+    isError,
+    error,
+    refetch,
     isEnabled: data?.enabled,
     isAuthenticated: data?.authenticated,
   };

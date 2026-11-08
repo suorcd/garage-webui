@@ -50,6 +50,21 @@ export class APIError extends Error {
   }
 }
 
+// The 401 redirect is a full page load, so the current path must travel
+// in the URL. Strip the base path: the router resolves the stored path
+// against the base path again after login.
+function loginReturnToQuery(): string {
+  const path = window.location.pathname;
+  const relative =
+    BASE_PATH !== "" &&
+    (path === BASE_PATH || path.startsWith(BASE_PATH + "/"))
+      ? path.slice(BASE_PATH.length) || "/"
+      : path;
+  const target = relative + window.location.search;
+  const returnTo = target.startsWith("/auth") ? "/" : target;
+  return `?returnTo=${encodeURIComponent(returnTo)}`;
+}
+
 const api = {
   async fetch<T = unknown>(url: string, options?: Partial<FetchOptions>) {
     const headers: Record<string, string> = {
@@ -125,7 +140,7 @@ const api = {
     }
 
     if (res.status === 401 && !url.startsWith("/auth")) {
-      window.location.href = utils.url("/auth/login");
+      window.location.href = utils.url("/auth/login") + loginReturnToQuery();
       throw new APIError("unauthorized", res.status);
     }
 

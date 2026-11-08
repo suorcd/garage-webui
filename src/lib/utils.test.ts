@@ -1,6 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { toast } from "sonner";
-import { readableBytes, copyToClipboard, encodePath } from "./utils";
+import {
+  readableBytes,
+  copyToClipboard,
+  encodePath,
+  parseReturnTo,
+} from "./utils";
 
 vi.mock("sonner", () => ({
   toast: { success: vi.fn(), error: vi.fn(), warning: vi.fn() },
@@ -71,5 +76,48 @@ describe("copyToClipboard", () => {
     await copyToClipboard("hello");
     expect(toast.success).not.toHaveBeenCalled();
     expect(toast.error).toHaveBeenCalled();
+  });
+});
+
+describe("parseReturnTo", () => {
+  it("keeps an in-app path", () => {
+    expect(parseReturnTo("/buckets/abc")).toBe("/buckets/abc");
+  });
+
+  it("keeps a query string on the path", () => {
+    expect(parseReturnTo("/buckets/abc?prefix=photos%2F")).toBe(
+      "/buckets/abc?prefix=photos%2F",
+    );
+  });
+
+  it("falls back to the dashboard for a missing value", () => {
+    expect(parseReturnTo(null)).toBe("/");
+    expect(parseReturnTo(undefined)).toBe("/");
+    expect(parseReturnTo("")).toBe("/");
+  });
+
+  it("falls back to the dashboard for an absolute URL", () => {
+    expect(parseReturnTo("https://evil.example/buckets")).toBe("/");
+  });
+
+  it("falls back to the dashboard for a protocol-relative URL", () => {
+    expect(parseReturnTo("//evil.example/buckets")).toBe("/");
+  });
+
+  it("falls back to the dashboard for a path back into auth", () => {
+    expect(parseReturnTo("/auth/login")).toBe("/");
+  });
+
+  it("falls back to the dashboard for a backslash path", () => {
+    expect(parseReturnTo("/\\evil.example")).toBe("/");
+  });
+
+  it("keeps a path that only starts with the auth letters", () => {
+    expect(parseReturnTo("/authors/list")).toBe("/authors/list");
+  });
+
+  it("falls back for the bare auth path and its children", () => {
+    expect(parseReturnTo("/auth")).toBe("/");
+    expect(parseReturnTo("/auth/login")).toBe("/");
   });
 });
