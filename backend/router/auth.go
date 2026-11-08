@@ -164,15 +164,10 @@ func (c *Auth) Logout(w http.ResponseWriter, r *http.Request) {
 }
 
 func (c *Auth) GetStatus(w http.ResponseWriter, r *http.Request) {
-	isAuthenticated := false
-	authSession := utils.Session.Get(r, "authenticated")
-	enabled := false
+	enabled := utils.GetEnv("AUTH_USER_PASS", "") != ""
+	isAuthenticated := !enabled
 
-	if utils.GetEnv("AUTH_USER_PASS", "") != "" {
-		enabled = true
-	}
-
-	if authSession != nil && authSession.(bool) {
+	if authSession := utils.Session.Get(r, "authenticated"); authSession != nil && authSession.(bool) {
 		isAuthenticated = true
 	}
 

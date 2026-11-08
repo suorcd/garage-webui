@@ -110,7 +110,7 @@ func TestLoginRejectsRepeatedFailedAttempts(t *testing.T) {
 	}
 }
 
-func TestGetStatusReportsUnauthenticatedWithoutSession(t *testing.T) {
+func TestGetStatusReportsAuthenticatedWhenAuthIsDisabled(t *testing.T) {
 	t.Setenv("AUTH_USER_PASS", "")
 	t.Setenv("AUTH_DISABLED", "true")
 
@@ -129,11 +129,42 @@ func TestGetStatusReportsUnauthenticatedWithoutSession(t *testing.T) {
 		t.Fatalf("cannot decode response: %v", err)
 	}
 
-	if status["authenticated"] {
-		t.Error("expected authenticated false without a session, got true")
+	if !status["authenticated"] {
+		t.Error("expected authenticated true when auth is disabled, got false")
 	}
 	if status["enabled"] {
 		t.Error("expected enabled false without AUTH_USER_PASS, got true")
+	}
+}
+
+func TestGetStatusReportsUnauthenticatedWhenAuthIsEnabledWithoutSession(t *testing.T) {
+	t.Setenv("AUTH_USER_PASS", "admin:unused-hash")
+	t.Setenv("AUTH_DISABLED", "")
+
+	// Call the handler directly: the middleware never lets a session-less
+	// request through when auth is enabled, so the router cannot show it.
+	auth := &Auth{}
+	sessionMgr := utils.InitSessionManager()
+	handler := sessionMgr.LoadAndSave(http.HandlerFunc(auth.GetStatus))
+
+	req := httptest.NewRequest(http.MethodGet, "/auth/status", nil)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	var status map[string]bool
+	if err := json.Unmarshal(rec.Body.Bytes(), &status); err != nil {
+		t.Fatalf("cannot decode response: %v", err)
+	}
+
+	if status["authenticated"] {
+		t.Error("expected authenticated false without a session, got true")
+	}
+	if !status["enabled"] {
+		t.Error("expected enabled true with AUTH_USER_PASS set, got false")
 	}
 }
 
