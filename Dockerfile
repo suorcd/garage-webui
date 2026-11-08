@@ -1,13 +1,18 @@
 FROM node:22-slim@sha256:5ec23b7c622b00547753bc6ffd78085dd868a68aeb41c8e0a1418f033e13d96d AS frontend
 WORKDIR /app
 
+# Bake a base path into the frontend build, for a subpath install.
+# Empty means the root. Pass it at build time, for example:
+# docker build --build-arg VITE_BASE_PATH=/sub .
+ARG VITE_BASE_PATH=""
+
 RUN npm install -g corepack@latest && corepack prepare pnpm@10 --activate
 
 COPY package.json pnpm-lock.yaml ./
 RUN --mount=type=cache,id=pnpm,target=/pnpm/store pnpm install --frozen-lockfile
 
 COPY . .
-RUN pnpm run build
+RUN VITE_BASE_PATH="$VITE_BASE_PATH" pnpm run build
 
 FROM golang:1.26@sha256:cfa27959837144bf4649802ba38e59daffd0dd2a7994aa83daaf113285b0f551 AS backend
 WORKDIR /app
