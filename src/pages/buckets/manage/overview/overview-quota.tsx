@@ -13,19 +13,34 @@ const QuotaSection = () => {
 
   const form = useForm<QuotaSchema>({
     resolver: zodResolver(quotaSchema),
+    mode: "onChange",
   });
   const isEnabled = useWatch({ control: form.control, name: "enabled" });
 
   const updateMutation = useUpdateBucket(data?.id);
 
   const onChange = useDebounce((values: DeepPartial<QuotaSchema>) => {
-    const { enabled } = values;
-    const maxObjects = Number(values.maxObjects);
-    const maxSize = Math.round(Number(values.maxSize) * 1024 ** 3);
+    // Skip the save when a quota value is invalid. Without this check the
+    // save below would send null, and a negative value would clear the
+    // quota instead of showing an error.
+    const parsed = quotaSchema.safeParse(values);
+    if (!parsed.success) {
+      // Turning quotas off must still clear them. A leftover invalid value
+      // fails the schema, and a skipped save would leave the quota on the
+      // server while the toggle shows it off.
+      if (values.enabled === false) {
+        updateMutation.mutate({
+          quotas: { maxObjects: null, maxSize: null },
+        });
+      }
+      return;
+    }
 
+    const { enabled, maxObjects, maxSize } = parsed.data;
     const data = {
-      maxObjects: enabled && maxObjects > 0 ? maxObjects : null,
-      maxSize: enabled && maxSize > 0 ? maxSize : null,
+      maxObjects: enabled && maxObjects != null ? maxObjects : null,
+      maxSize:
+        enabled && maxSize != null ? Math.round(maxSize * 1024 ** 3) : null,
     };
 
     updateMutation.mutate({ quotas: data });
