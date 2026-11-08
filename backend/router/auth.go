@@ -15,11 +15,13 @@ import (
 )
 
 const (
-	loginMaxFailures  = 5
-	loginWindow       = 15 * time.Minute
-	loginLockout      = 15 * time.Minute
-	loginFailureDelay = 200 * time.Millisecond
-	loginMaxBodyBytes = 64 << 10
+	loginMaxFailures      = 5
+	loginWindow           = 15 * time.Minute
+	loginLockout          = 15 * time.Minute
+	loginFailureDelay     = 200 * time.Millisecond
+	loginMaxBodyBytes     = 64 << 10
+	loginMaxAttemptsPerIP = 30
+	loginMaxRecords       = 1024
 )
 
 type loginRecord struct {
@@ -28,12 +30,59 @@ type loginRecord struct {
 	blockedUntil time.Time
 }
 
-type loginLimiter struct {
-	mu      sync.Mutex
-	records map[string]*loginRecord
+// ipAttemptRecord counts every login attempt from one IP in the window.
+type ipAttemptRecord struct {
+	count       int
+	windowStart time.Time
 }
 
-var loginLimits = &loginLimiter{records: map[string]*loginRecord{}}
+type loginLimiter struct {
+	mu         sync.Mutex
+	records    map[string]*loginRecord
+	ipAttempts map[string]*ipAttemptRecord
+}
+
+var loginLimits = &loginLimiter{
+	records:    map[string]*loginRecord{},
+	ipAttempts: map[string]*ipAttemptRecord{},
+}
+
+// AllowIP counts one login attempt from ip and reports whether the IP
+// stays under the coarse attempt cap. It counts every attempt, so one
+// account's failures alone cannot trip the coarse cap.
+func (l *loginLimiter) AllowIP(ip string) bool {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+
+	now := time.Now()
+	record, ok := l.ipAttempts[ip]
+	if !ok || now.Sub(record.windowStart) >= loginWindow {
+		record = &ipAttemptRecord{count: 1, windowStart: now}
+		l.ipAttempts[ip] = record
+	} else {
+		record.count++
+	}
+
+	l.pruneIPAttempts(now, ip)
+	return record.count <= loginMaxAttemptsPerIP
+}
+
+// RetryAfterIP returns the time until the IP window resets.
+func (l *loginLimiter) RetryAfterIP(ip string) time.Duration {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+
+	record, ok := l.ipAttempts[ip]
+	if !ok {
+		return 0
+	}
+
+	remaining := loginWindow - time.Since(record.windowStart)
+	if remaining < 0 {
+		return 0
+	}
+	return remaining
+}
 
 func (l *loginLimiter) Allow(ip string) bool {
 	l.mu.Lock()
@@ -72,12 +121,69 @@ func (l *loginLimiter) Fail(ip string) {
 		record.blockedUntil = now.Add(loginLockout)
 	}
 
-	if len(l.records) > 1024 {
+	l.pruneRecords(now, ip)
+}
+
+// pruneRecords drops expired account records, then evicts the oldest live
+// record while the map stays over the cap. The caller must hold the lock.
+// The kept key is never evicted. An evicted record loses its failure
+// history, but the coarse per-IP cap still bounds the source.
+func (l *loginLimiter) pruneRecords(now time.Time, keep string) {
+	if len(l.records) <= loginMaxRecords {
+		return
+	}
+	for key, item := range l.records {
+		if now.Sub(item.windowStart) >= loginWindow && !now.Before(item.blockedUntil) {
+			delete(l.records, key)
+		}
+	}
+	for len(l.records) > loginMaxRecords {
+		oldest := ""
+		var oldestStart time.Time
+		first := true
 		for key, item := range l.records {
-			if now.Sub(item.windowStart) >= loginWindow && !now.Before(item.blockedUntil) {
-				delete(l.records, key)
+			if key == keep {
+				continue
+			}
+			if first || item.windowStart.Before(oldestStart) {
+				oldest, oldestStart, first = key, item.windowStart, false
 			}
 		}
+		if oldest == "" {
+			return
+		}
+		delete(l.records, oldest)
+	}
+}
+
+// pruneIPAttempts drops expired IP records, then evicts the oldest live
+// record while the map stays over the cap. The caller must hold the lock.
+// The kept IP is never evicted.
+func (l *loginLimiter) pruneIPAttempts(now time.Time, keep string) {
+	if len(l.ipAttempts) <= loginMaxRecords {
+		return
+	}
+	for key, item := range l.ipAttempts {
+		if now.Sub(item.windowStart) >= loginWindow {
+			delete(l.ipAttempts, key)
+		}
+	}
+	for len(l.ipAttempts) > loginMaxRecords {
+		oldest := ""
+		var oldestStart time.Time
+		first := true
+		for key, item := range l.ipAttempts {
+			if key == keep {
+				continue
+			}
+			if first || item.windowStart.Before(oldestStart) {
+				oldest, oldestStart, first = key, item.windowStart, false
+			}
+		}
+		if oldest == "" {
+			return
+		}
+		delete(l.ipAttempts, oldest)
 	}
 }
 
@@ -95,6 +201,7 @@ func (l *loginLimiter) ResetAll() {
 	defer l.mu.Unlock()
 
 	l.records = map[string]*loginRecord{}
+	l.ipAttempts = map[string]*ipAttemptRecord{}
 }
 
 func (l *loginLimiter) RetryAfter(ip string) time.Duration {
@@ -113,19 +220,19 @@ func (l *loginLimiter) RetryAfter(ip string) time.Duration {
 	return remaining
 }
 
-func clientIP(r *http.Request) string {
+func (c *Auth) clientIP(r *http.Request) string {
 	host, _, err := net.SplitHostPort(r.RemoteAddr)
 	if err != nil {
 		return r.RemoteAddr
 	}
-	if !trustedProxy(host) {
+	if !c.trustedProxies.contains(host) {
 		return host
 	}
 	if forwarded := r.Header.Get("X-Forwarded-For"); forwarded != "" {
 		parts := strings.Split(forwarded, ",")
 		for i := len(parts) - 1; i >= 0; i-- {
 			candidate := strings.TrimSpace(parts[i])
-			if net.ParseIP(candidate) == nil || trustedProxy(candidate) {
+			if net.ParseIP(candidate) == nil || c.trustedProxies.contains(candidate) {
 				continue
 			}
 			return candidate
@@ -137,30 +244,56 @@ func clientIP(r *http.Request) string {
 	return host
 }
 
-// trustedProxy reports whether ip is a configured trusted proxy. TRUSTED_PROXIES
-// holds IPs and CIDRs, comma separated. Empty means no proxy is trusted, so
-// forwarded headers are ignored.
-func trustedProxy(ip string) bool {
-	for _, entry := range strings.Split(utils.GetEnv("TRUSTED_PROXIES", ""), ",") {
+// trustedProxies holds the parsed TRUSTED_PROXIES list. The list is parsed
+// once when the router is built, so a request never re-reads the variable.
+// TRUSTED_PROXIES holds IPs and CIDRs, comma separated. Empty means no
+// proxy is trusted, so forwarded headers are ignored.
+type trustedProxies struct {
+	cidrs  []*net.IPNet
+	ips    []net.IP
+	others []string
+}
+
+func parseTrustedProxies(value string) *trustedProxies {
+	parsed := &trustedProxies{}
+	for _, entry := range strings.Split(value, ",") {
 		entry = strings.TrimSpace(entry)
 		if entry == "" {
 			continue
 		}
 		if _, network, err := net.ParseCIDR(entry); err == nil {
-			if parsed := net.ParseIP(ip); parsed != nil && network.Contains(parsed) {
-				return true
-			}
+			parsed.cidrs = append(parsed.cidrs, network)
 			continue
 		}
-		if parsed := net.ParseIP(entry); parsed != nil {
-			if ipParsed := net.ParseIP(ip); ipParsed != nil && parsed.Equal(ipParsed) {
-				return true
-			}
+		if ip := net.ParseIP(entry); ip != nil {
+			parsed.ips = append(parsed.ips, ip)
 			continue
 		}
 		// Unparseable entries (hostnames, zone-scoped addresses) compare
 		// case-insensitively: DNS names are case-insensitive, and a zone
 		// suffix keeps an address from parsing.
+		parsed.others = append(parsed.others, entry)
+	}
+	return parsed
+}
+
+// contains reports whether ip is a configured trusted proxy.
+func (t *trustedProxies) contains(ip string) bool {
+	if t == nil {
+		return false
+	}
+	parsed := net.ParseIP(ip)
+	for _, network := range t.cidrs {
+		if parsed != nil && network.Contains(parsed) {
+			return true
+		}
+	}
+	for _, entry := range t.ips {
+		if parsed != nil && entry.Equal(parsed) {
+			return true
+		}
+	}
+	for _, entry := range t.others {
 		if strings.EqualFold(entry, ip) {
 			return true
 		}
@@ -175,19 +308,37 @@ func loginLimitKey(ip, username string) string {
 	return ip + "\x00" + username
 }
 
-type Auth struct{}
+type Auth struct {
+	trustedProxies *trustedProxies
+}
 
 func (c *Auth) Login(w http.ResponseWriter, r *http.Request) {
-	ip := clientIP(r)
+	ip := c.clientIP(r)
+
+	// The coarse counter bounds every attempt from one IP, including
+	// malformed bodies, which never reach the per-account limiter.
+	if !loginLimits.AllowIP(ip) {
+		seconds := int(loginLimits.RetryAfterIP(ip).Seconds())
+		if seconds < 1 {
+			seconds = 1
+		}
+
+		w.Header().Set("Retry-After", strconv.Itoa(seconds))
+		utils.ResponseErrorStatus(w, errors.New("too many login attempts; try again later"), http.StatusTooManyRequests)
+		return
+	}
 
 	var body struct {
 		Username string `json:"username"`
 		Password string `json:"password"`
 	}
 	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, loginMaxBodyBytes)).Decode(&body); err != nil {
-		loginLimits.Fail(loginLimitKey(ip, ""))
-		time.Sleep(loginFailureDelay)
-		utils.ResponseError(w, err)
+		var tooLarge *http.MaxBytesError
+		if errors.As(err, &tooLarge) {
+			utils.ResponseErrorStatus(w, errors.New("request body too large"), http.StatusRequestEntityTooLarge)
+		} else {
+			utils.ResponseErrorStatus(w, errors.New("invalid request body"), http.StatusBadRequest)
+		}
 		return
 	}
 

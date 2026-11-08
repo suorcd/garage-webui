@@ -186,6 +186,7 @@ Configurable envs:
 - `MAX_THUMBNAIL_SIZE`: Maximum image size in bytes for thumbnail generation. Defaults to 5242880 (5 MiB). Larger images show a placeholder.
 - `AUTH_USER_PASS`: The login in `username:password_hash` format. The server refuses to start when this value is empty, unless `AUTH_DISABLED=true`.
 - `AUTH_DISABLED`: Set to `true` to disable authentication for local development. The server logs a warning. Do not use this value in production.
+- `TRUSTED_PROXIES`: IPs and CIDRs of trusted proxies, comma separated. Only these proxies may set `X-Forwarded-For` and `X-Real-IP`. Empty means no proxy is trusted.
 
 ### Authentication
 
