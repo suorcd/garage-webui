@@ -110,6 +110,7 @@ const api = {
     const signal = init.signal ?? AbortSignal.timeout(timeoutMs);
 
     let res: Response;
+    let text: string;
     try {
       res = await fetch(_url, {
         ...init,
@@ -118,6 +119,10 @@ const api = {
         headers: { ...headers, ...(extraHeaders || {}) },
         body,
       });
+      // The deadline also covers the body read. Reading it outside this try
+      // let a stalled body escape as a raw DOMException instead of the
+      // timeout the caller expects.
+      text = await res.text();
     } catch (error) {
       const name = (error as { name?: unknown })?.name;
       if (name === "AbortError" || name === "TimeoutError") {
@@ -129,7 +134,6 @@ const api = {
     const isJson = res.headers
       .get("Content-Type")
       ?.includes("application/json");
-    const text = await res.text();
     let data: unknown = text;
     if (isJson && text !== "") {
       try {

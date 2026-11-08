@@ -70,4 +70,25 @@ describe("createQueryClient defaults", () => {
 
     expect(queryFn).toHaveBeenCalledTimes(1);
   });
+
+  it("does not retry a query that times out", async () => {
+    vi.useFakeTimers();
+    try {
+      const queryFn = vi.fn(() =>
+        Promise.reject(new APIError("Request timed out", 408)),
+      );
+      const client = createQueryClient();
+      const { result } = renderHook(
+        () => useQuery({ queryKey: ["probe-timeout"], queryFn }),
+        { wrapper: wrapperFor(client) },
+      );
+
+      await vi.advanceTimersByTimeAsync(120_000);
+
+      expect(queryFn).toHaveBeenCalledTimes(1);
+      expect(result.current.isError).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });
