@@ -1,0 +1,5 @@
+This directory holds the built frontend, and the prod build embeds it.
+
+This file is a placeholder. It keeps the directory in the checkout so
+the prod build finds it on a fresh clone. The real files come from the
+frontend build. The flake and the Dockerfile copy them here.
