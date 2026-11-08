@@ -1,5 +1,6 @@
 import { cleanup, render, screen } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { toast } from "sonner";
 
@@ -157,5 +158,49 @@ describe("ObjectActions recursive delete", () => {
     capturedOptions.onError?.(new Error("boom"));
 
     expect(toast.warning).not.toHaveBeenCalled();
+  });
+});
+
+describe("ObjectActions download", () => {
+  afterEach(() => {
+    cleanup();
+    vi.restoreAllMocks();
+  });
+
+  beforeEach(() => {
+    vi.spyOn(window, "open").mockImplementation(() => null);
+  });
+
+  it("opens the download in a new tab without opener access", async () => {
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    const user = userEvent.setup();
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <table>
+          <tbody>
+            <tr>
+              <ObjectActions
+                prefix=""
+                object={{
+                  objectKey: "file.txt",
+                  url: "/browse/bucket-1/file.txt",
+                }}
+              />
+            </tr>
+          </tbody>
+        </table>
+      </QueryClientProvider>
+    );
+
+    await user.click(screen.getAllByRole("button")[0]);
+
+    expect(window.open).toHaveBeenCalledWith(
+      expect.stringContaining("?dl=1"),
+      "_blank",
+      "noopener,noreferrer"
+    );
   });
 });

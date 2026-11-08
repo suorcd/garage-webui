@@ -84,7 +84,7 @@ const ObjectList = ({ prefix, onPrefixChange }: Props) => {
   }, [hasData, lastPageParam, setSearchParams]);
 
   const onObjectClick = (object: Object) => {
-    window.open(API_URL + object.url + "?view=1", "_blank");
+    window.open(API_URL + object.url + "?view=1", "_blank", "noopener,noreferrer");
   };
 
   return (
