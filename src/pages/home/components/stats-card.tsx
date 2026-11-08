@@ -6,16 +6,9 @@ type Props = {
   value?: string | number | null;
   icon: LucideIcon;
   valueClassName?: string;
-  children?: React.ReactNode;
 };
 
-const StatsCard = ({
-  title,
-  value,
-  icon: Icon,
-  valueClassName,
-  children,
-}: Props) => {
+const StatsCard = ({ title, value, icon: Icon, valueClassName }: Props) => {
   return (
     <div className="bg-base-100 rounded-box p-4 md:p-6 flex flex-row items-center">
       <div className="shrink-0 w-[60px]">
@@ -23,13 +16,9 @@ const StatsCard = ({
       </div>
 
       <div className="flex-1 truncate">
-        {children != null ? (
-          children
-        ) : (
-          <p className={cn("flex-1 text-3xl font-bold", valueClassName)}>
-            {typeof value === "undefined" ? "..." : value}
-          </p>
-        )}
+        <p className={cn("flex-1 text-3xl font-bold", valueClassName)}>
+          {typeof value === "undefined" ? "..." : value}
+        </p>
         <p className="text-sm mt-0.5 truncate">{title}</p>
       </div>
     </div>

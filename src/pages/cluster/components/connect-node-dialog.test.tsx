@@ -1,7 +1,7 @@
 import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type { ReactNode } from "react";
 
 const { apiPost, toastError, toastSuccess } = vi.hoisted(() => ({
@@ -23,23 +23,9 @@ import ConnectNodeDialog from "./connect-node-dialog";
 const nodeId =
   "e09e9377a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6";
 
-// jsdom has no showModal, show, or close on HTMLDialogElement. Stub them
-// so the dialog opens and closes through its open attribute.
-beforeEach(() => {
-  HTMLDialogElement.prototype.showModal = function (this: HTMLDialogElement) {
-    this.setAttribute("open", "");
-  };
-  HTMLDialogElement.prototype.close = function (this: HTMLDialogElement) {
-    this.removeAttribute("open");
-  };
-});
-
 afterEach(() => {
   cleanup();
   vi.clearAllMocks();
-  delete (HTMLDialogElement.prototype as Partial<HTMLDialogElement>)
-    .showModal;
-  delete (HTMLDialogElement.prototype as Partial<HTMLDialogElement>).close;
 });
 
 function wrapper({ children }: { children: ReactNode }) {

@@ -3,7 +3,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { Plus } from "lucide-react";
 import { Modal } from "react-daisyui";
 import { useForm, useWatch } from "react-hook-form";
-import { useDisclosure } from "@/hooks/useDisclosure";
+import { createDisclosure } from "@/lib/disclosure";
 import { createKeySchema, CreateKeySchema } from "../schema";
 import { InputField } from "@/components/ui/input";
 import { CheckboxField } from "@/components/ui/checkbox";
@@ -20,7 +20,8 @@ type CreatedKey = {
 };
 
 const CreateKeyDialog = () => {
-  const { dialogRef, isOpen, onOpen, onClose } = useDisclosure();
+  const [dialog] = useState(() => createDisclosure());
+  const { dialogRef, isOpen } = dialog.use();
   const form = useForm<CreateKeySchema>({
     resolver: zodResolver(createKeySchema),
     defaultValues: {
@@ -62,7 +63,7 @@ const CreateKeyDialog = () => {
     // Drop the response too: it carries the new secret, and a closed dialog
     // must not keep it in the mutation cache.
     createKey.reset();
-    onClose();
+    dialog.close();
   };
 
   const createKey = useCreateKey({
@@ -99,7 +100,7 @@ const CreateKeyDialog = () => {
 
   return (
     <>
-      <Button icon={Plus} color="primary" onClick={onOpen}>
+      <Button icon={Plus} color="primary" onClick={() => dialog.open()}>
         Create Key
       </Button>
 

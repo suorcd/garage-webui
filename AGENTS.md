@@ -79,8 +79,8 @@ Frontend:
   `checkbox.tsx`, `chips.tsx`, `code.tsx`, `form-control.tsx`, `goto-top-btn.tsx`,
   `input.tsx`, `select.tsx`, `toggle.tsx`. `layouts/` holds the page frames and
   `containers/` the wider blocks.
-- `src/hooks/` - the shared hooks only: `useAuth`, `useConfig`, `useDebounce`,
-  `useDisclosure`. A hook that one screen uses belongs in that screen.
+- `src/hooks/` - the shared hooks only: `useAuth`, `useConfig`, `useDebounce`.
+  A hook that one screen uses belongs in that screen.
 - `src/lib/api.ts` - the only place that sends a request to the Go backend. Request shapes
   and error handling live here.
 - `src/context/` - the React context that more than one screen uses.

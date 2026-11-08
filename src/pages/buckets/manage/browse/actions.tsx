@@ -5,7 +5,7 @@ import { toast } from "sonner";
 import { handleError } from "@/lib/utils";
 import { useQueryClient } from "@tanstack/react-query";
 import { useBucketContext } from "../context";
-import { useDisclosure } from "@/hooks/useDisclosure";
+import { createDisclosure } from "@/lib/disclosure";
 import { Modal } from "react-daisyui";
 import { createFolderSchema, CreateFolderSchema } from "./schema";
 import { useForm } from "react-hook-form";
@@ -100,7 +100,6 @@ const Actions = ({ prefix, canWrite }: Props) => {
   return (
     <>
       <CreateFolderAction prefix={prefix} canWrite={canWrite} />
-      {/* <Button icon={FilePlus} color="ghost" /> */}
       <Button
         icon={UploadIcon}
         color="ghost"
@@ -113,7 +112,6 @@ const Actions = ({ prefix, canWrite }: Props) => {
         disabled={!canWrite || uploading}
         loading={uploading}
       />
-      {/* <Button icon={EllipsisVertical} color="ghost" /> */}
     </>
   );
 };
@@ -124,7 +122,8 @@ type CreateFolderActionProps = {
 };
 
 const CreateFolderAction = ({ prefix, canWrite }: CreateFolderActionProps) => {
-  const { dialogRef, isOpen, onOpen, onClose } = useDisclosure();
+  const [dialog] = useState(() => createDisclosure());
+  const { dialogRef, isOpen } = dialog.use();
   const { bucket } = useBucketContext();
   const queryClient = useQueryClient();
 
@@ -145,14 +144,14 @@ const CreateFolderAction = ({ prefix, canWrite }: CreateFolderActionProps) => {
 
   const handleClose = () => {
     form.reset();
-    onClose();
+    dialog.close();
   };
 
   const createFolder = usePutObject(bucket.id, {
     onSuccess: () => {
       toast.success("Folder created!");
       queryClient.invalidateQueries({ queryKey: ["browse", bucket.id] });
-      onClose();
+      dialog.close();
       form.reset();
     },
     onError: handleError,
@@ -167,7 +166,7 @@ const CreateFolderAction = ({ prefix, canWrite }: CreateFolderActionProps) => {
       <Button
         icon={FolderPlus}
         color="ghost"
-        onClick={onOpen}
+        onClick={() => dialog.open()}
         title={
           canWrite
             ? "Create Folder"

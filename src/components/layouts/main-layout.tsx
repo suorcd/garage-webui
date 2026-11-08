@@ -1,10 +1,10 @@
 import { PageContext } from "@/context/page-context";
-import { Suspense, useContext, useEffect, useRef } from "react";
+import { Suspense, useContext, useEffect, useRef, useState } from "react";
 import { Navigate, Outlet, useLocation, useNavigate } from "react-router-dom";
 import Sidebar from "../containers/sidebar";
 import { ArrowLeft, MenuIcon } from "lucide-react";
 import Button from "../ui/button";
-import { useDisclosure } from "@/hooks/useDisclosure";
+import { createDisclosure } from "@/lib/disclosure";
 import { Drawer } from "react-daisyui";
 import { useAuth } from "@/hooks/useAuth";
 import { ErrorBoundary } from "@/components/error-boundary";
@@ -12,23 +12,24 @@ import PageLoading from "@/components/ui/page-loading";
 import AuthErrorState from "./auth-error-state";
 
 const MainLayout = () => {
-  const sidebar = useDisclosure();
+  const [sidebar] = useState(() => createDisclosure());
+  const { isOpen: sidebarOpen } = sidebar.use();
   const { pathname, search } = useLocation();
   const auth = useAuth();
 
   // The effect below must run only when the path changes. It reads the
   // disclosure through a ref, so a re-render never closes the sidebar.
-  const sidebarRef = useRef(sidebar);
+  const sidebarRef = useRef(sidebarOpen);
 
   useEffect(() => {
-    sidebarRef.current = sidebar;
+    sidebarRef.current = sidebarOpen;
   });
 
   useEffect(() => {
-    if (sidebarRef.current.isOpen) {
-      sidebarRef.current.onClose();
+    if (sidebarRef.current) {
+      sidebar.close();
     }
-  }, [pathname]);
+  }, [pathname, sidebar]);
 
   if (auth.isLoading) {
     return <PageLoading className="min-h-svh py-0" />;
@@ -49,13 +50,13 @@ const MainLayout = () => {
 
   return (
     <Drawer
-      open={sidebar.isOpen}
-      onClickOverlay={sidebar.onClose}
+      open={sidebarOpen}
+      onClickOverlay={sidebar.close}
       className="md:drawer-open h-screen max-h-dvh"
       side={<Sidebar />}
       contentClassName="flex flex-col overflow-hidden"
     >
-      <Header onSidebarOpen={sidebar.onOpen} />
+      <Header onSidebarOpen={() => sidebar.open()} />
 
       <main className="flex-1 overflow-y-auto p-4 md:p-8">
         <ErrorBoundary>

@@ -54,5 +54,3 @@ export const ToggleField = <T extends FieldValues>({
     />
   );
 };
-
-export default Toggle;

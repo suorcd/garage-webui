@@ -6,13 +6,13 @@ export type UseBrowserObjectOptions = Partial<{
 
 export type GetObjectsResult = {
   prefixes: string[];
-  objects: Object[];
+  objects: BrowseObject[];
   prefix: string;
   nextToken: string | null;
   s3Bucket: string;
 };
 
-export type Object = {
+export type BrowseObject = {
   objectKey: string;
   lastModified: Date;
   size: number;

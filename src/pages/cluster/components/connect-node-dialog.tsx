@@ -5,13 +5,15 @@ import { useConnectNode } from "../hooks";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { ConnectNodeSchema, connectNodeSchema } from "../schema";
-import { useCallback, useRef } from "react";
+import { createDisclosure } from "@/lib/disclosure";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
 import { Plug } from "lucide-react";
+import { useState } from "react";
 
 const ConnectNodeDialog = () => {
-  const dialogRef = useRef<HTMLDialogElement>(null);
+  const [dialog] = useState(() => createDisclosure());
+  const { dialogRef, isOpen } = dialog.use();
   const queryClient = useQueryClient();
 
   const form = useForm<ConnectNodeSchema>({
@@ -22,7 +24,7 @@ const ConnectNodeDialog = () => {
   const connectNode = useConnectNode({
     onSuccess() {
       form.reset({ nodeId: "", address: "" });
-      handleHide();
+      dialog.close();
       toast.success("Node connected!");
       queryClient.invalidateQueries({ queryKey: ["status"] });
     },
@@ -30,14 +32,6 @@ const ConnectNodeDialog = () => {
       toast.error(err?.message || "Unknown error");
     },
   });
-
-  const handleShow = useCallback(() => {
-    dialogRef.current?.showModal();
-  }, [dialogRef]);
-
-  const handleHide = useCallback(() => {
-    dialogRef.current?.close();
-  }, [dialogRef]);
 
   const onSubmit = form.handleSubmit((values) => {
     connectNode.mutate(
@@ -47,12 +41,12 @@ const ConnectNodeDialog = () => {
 
   return (
     <>
-      <Button color="primary" onClick={handleShow}>
+      <Button color="primary" onClick={() => dialog.open()}>
         <Plug />
         Connect
       </Button>
 
-      <Modal ref={dialogRef} backdrop>
+      <Modal ref={dialogRef} open={isOpen} backdrop>
         <form
           onSubmit={(e) => {
             e.preventDefault();
@@ -85,7 +79,7 @@ const ConnectNodeDialog = () => {
             </p>
           </Modal.Body>
           <Modal.Actions>
-            <Button type="button" onClick={handleHide}>
+            <Button type="button" onClick={dialog.close}>
               Cancel
             </Button>
             <Button

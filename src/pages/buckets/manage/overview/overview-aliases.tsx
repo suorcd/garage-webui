@@ -1,7 +1,7 @@
 import { Modal } from "react-daisyui";
 import { Plus } from "lucide-react";
 import Chips from "@/components/ui/chips";
-import { useDisclosure } from "@/hooks/useDisclosure";
+import { createDisclosure } from "@/lib/disclosure";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { AddAliasSchema, addAliasSchema } from "../schema";
@@ -10,7 +10,7 @@ import { useAddAlias, useRemoveAlias } from "../hooks";
 import { toast } from "sonner";
 import { handleError } from "@/lib/utils";
 import { InputField } from "@/components/ui/input";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useBucketContext } from "../context";
 
@@ -51,7 +51,8 @@ const AliasesSection = () => {
 };
 
 const AddAliasDialog = ({ id }: { id?: string }) => {
-  const { dialogRef, isOpen, onOpen, onClose } = useDisclosure();
+  const [dialog] = useState(() => createDisclosure());
+  const { dialogRef, isOpen } = dialog.use();
   const form = useForm<AddAliasSchema>({
     resolver: zodResolver(addAliasSchema),
     defaultValues: { alias: "" },
@@ -65,7 +66,7 @@ const AddAliasDialog = ({ id }: { id?: string }) => {
   const addAlias = useAddAlias(id, {
     onSuccess: () => {
       form.reset();
-      onClose();
+      dialog.close();
       toast.success("Alias added!");
       queryClient.invalidateQueries({ queryKey: ["bucket", id] });
     },
@@ -78,7 +79,7 @@ const AddAliasDialog = ({ id }: { id?: string }) => {
 
   return (
     <>
-      <Button size="sm" onClick={onOpen} icon={Plus}>
+      <Button size="sm" onClick={() => dialog.open()} icon={Plus}>
         Add Alias
       </Button>
 
@@ -92,7 +93,7 @@ const AddAliasDialog = ({ id }: { id?: string }) => {
         </Modal.Body>
 
         <Modal.Actions>
-          <Button onClick={onClose}>Cancel</Button>
+          <Button onClick={dialog.close}>Cancel</Button>
           <Button
             color="primary"
             onClick={onSubmit}
