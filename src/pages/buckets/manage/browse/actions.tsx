@@ -124,7 +124,7 @@ type CreateFolderActionProps = {
 };
 
 const CreateFolderAction = ({ prefix, canWrite }: CreateFolderActionProps) => {
-  const { isOpen, onOpen, onClose } = useDisclosure();
+  const { dialogRef, isOpen, onOpen, onClose } = useDisclosure();
   const { bucket } = useBucketContext();
   const queryClient = useQueryClient();
 
@@ -136,6 +136,17 @@ const CreateFolderAction = ({ prefix, canWrite }: CreateFolderActionProps) => {
   useEffect(() => {
     if (isOpen) form.setFocus("name");
   }, [isOpen]);
+
+  // Reset the form when the dialog closes. The effect also covers a close
+  // that bypasses React, such as the backdrop form closing the dialog.
+  useEffect(() => {
+    if (!isOpen) form.reset();
+  }, [isOpen, form]);
+
+  const handleClose = () => {
+    form.reset();
+    onClose();
+  };
 
   const createFolder = usePutObject(bucket.id, {
     onSuccess: () => {
@@ -165,7 +176,7 @@ const CreateFolderAction = ({ prefix, canWrite }: CreateFolderActionProps) => {
         disabled={!canWrite}
       />
 
-      <Modal open={isOpen}>
+      <Modal ref={dialogRef} backdrop open={isOpen}>
         <Modal.Header>Create Folder</Modal.Header>
 
         <Modal.Body>
@@ -175,7 +186,7 @@ const CreateFolderAction = ({ prefix, canWrite }: CreateFolderActionProps) => {
         </Modal.Body>
 
         <Modal.Actions>
-          <Button onClick={onClose}>Cancel</Button>
+          <Button onClick={handleClose}>Cancel</Button>
           <Button
             color="primary"
             onClick={onSubmit}

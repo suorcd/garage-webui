@@ -5,6 +5,7 @@ import {
   screen,
   waitFor,
 } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -195,5 +196,41 @@ describe("Actions", () => {
     await waitFor(() => expect(toastSuccess).toHaveBeenCalledTimes(1));
     expect(upload.disabled).toBe(false);
     clickSpy.mockRestore();
+  });
+
+  it("clears the folder name when reopened after cancel", async () => {
+    const user = userEvent.setup();
+    const { container } = renderActions(true);
+
+    await user.click(screen.getByTitle("Create Folder"));
+    const name = container.querySelector(
+      'input[name="name"]'
+    ) as HTMLInputElement;
+    await user.type(name, "photos");
+    await user.click(screen.getByRole("button", { name: "Cancel" }));
+
+    await user.click(screen.getByTitle("Create Folder"));
+    expect(
+      (container.querySelector('input[name="name"]') as HTMLInputElement)
+        .value
+    ).toBe("");
+  });
+
+  it("syncs open state when the native dialog closes", async () => {
+    const user = userEvent.setup();
+    renderActions(true);
+
+    await user.click(screen.getByTitle("Create Folder"));
+    const dialog = screen.getByRole("dialog") as HTMLDialogElement;
+    expect(dialog.open).toBe(true);
+    expect(screen.getByText("close")).toBeTruthy();
+
+    fireEvent(dialog, new Event("close"));
+    expect(dialog.open).toBe(false);
+
+    await user.click(screen.getByTitle("Create Folder"));
+    expect(
+      (screen.getByRole("dialog") as HTMLDialogElement).open
+    ).toBe(true);
   });
 });
