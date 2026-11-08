@@ -4,12 +4,21 @@ import { Alert, Card } from "react-daisyui";
 import NodesList from "./components/nodes-list";
 import { useMemo } from "react";
 import { CircleXIcon } from "lucide-react";
+import Button from "@/components/ui/button";
+import PageLoading from "@/components/ui/page-loading";
 
 const ClusterPage = () => {
-  const { data } = useClusterStatus();
+  const {
+    data,
+    isLoading: statusLoading,
+    isError: statusFailed,
+    error: statusError,
+    refetch: refetchStatus,
+  } = useClusterStatus();
   const {
     data: nodeInfo,
     isError: nodeInfoFailed,
+    isLoading: nodeInfoLoading,
     error: nodeInfoError,
   } = useNodeInfo();
   const node = nodeInfo?.node;
@@ -35,22 +44,31 @@ const ClusterPage = () => {
         <Card.Body className="gap-1">
           <Card.Title className="mb-2">Details</Card.Title>
 
-          {(nodeInfo?.error != null || nodeInfoFailed) && (
-            <Alert status="error" icon={<CircleXIcon />}>
-              <span>
-                Node info error: {nodeInfo?.error || nodeInfoError?.message}
-              </span>
-            </Alert>
-          )}
+          {nodeInfoLoading ? (
+            <PageLoading />
+          ) : (
+            <>
+              {(nodeInfo?.error != null || nodeInfoFailed) && (
+                <Alert status="error" icon={<CircleXIcon />}>
+                  <span>
+                    Node info error: {nodeInfo?.error || nodeInfoError?.message}
+                  </span>
+                </Alert>
+              )}
 
-          {/* <DetailItem title="Node ID" value={node?.nodeId} /> */}
-          <DetailItem title="Garage Version" value={node?.garageVersion} />
-          {/* <DetailItem title="Rust version" value={data?.rustVersion} /> */}
-          <DetailItem title="DB engine" value={node?.dbEngine} />
-          <DetailItem
-            title="Layout version"
-            value={data?.layoutVersion || data?.layout?.version || "-"}
-          />
+              {/* <DetailItem title="Node ID" value={node?.nodeId} /> */}
+              <DetailItem
+                title="Garage Version"
+                value={node?.garageVersion}
+              />
+              {/* <DetailItem title="Rust version" value={data?.rustVersion} /> */}
+              <DetailItem title="DB engine" value={node?.dbEngine} />
+              <DetailItem
+                title="Layout version"
+                value={data?.layoutVersion || data?.layout?.version || "-"}
+              />
+            </>
+          )}
         </Card.Body>
       </Card>
 
@@ -58,7 +76,16 @@ const ClusterPage = () => {
         <Card.Body>
           <Card.Title>Nodes</Card.Title>
 
-          <NodesList nodes={nodes} />
+          {statusLoading ? (
+            <PageLoading />
+          ) : statusFailed ? (
+            <Alert status="error" icon={<CircleXIcon />}>
+              <span>{statusError?.message}</span>
+              <Button onClick={() => refetchStatus()}>Retry</Button>
+            </Alert>
+          ) : (
+            <NodesList nodes={nodes} />
+          )}
         </Card.Body>
       </Card>
     </div>

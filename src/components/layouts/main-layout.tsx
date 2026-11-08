@@ -7,6 +7,8 @@ import Button from "../ui/button";
 import { useDisclosure } from "@/hooks/useDisclosure";
 import { Drawer } from "react-daisyui";
 import { useAuth } from "@/hooks/useAuth";
+import { ErrorBoundary } from "@/components/error-boundary";
+import PageLoading from "@/components/ui/page-loading";
 
 const MainLayout = () => {
   const sidebar = useDisclosure();
@@ -28,7 +30,7 @@ const MainLayout = () => {
   }, [pathname]);
 
   if (auth.isLoading) {
-    return null;
+    return <PageLoading className="min-h-svh py-0" />;
   }
 
   if (!auth.isAuthenticated) {
@@ -46,9 +48,11 @@ const MainLayout = () => {
       <Header onSidebarOpen={sidebar.onOpen} />
 
       <main className="flex-1 overflow-y-auto p-4 md:p-8">
-        <Suspense>
-          <Outlet />
-        </Suspense>
+        <ErrorBoundary>
+          <Suspense fallback={<PageLoading />}>
+            <Outlet />
+          </Suspense>
+        </ErrorBoundary>
       </main>
     </Drawer>
   );

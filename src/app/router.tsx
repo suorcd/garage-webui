@@ -1,7 +1,14 @@
-import { createBrowserRouter, RouterProvider } from "react-router-dom";
+import {
+  createBrowserRouter,
+  Navigate,
+  RouterProvider,
+} from "react-router-dom";
 import { lazy, Suspense } from "react";
 import AuthLayout from "@/components/layouts/auth-layout";
 import MainLayout from "@/components/layouts/main-layout";
+import { RouteErrorElement } from "@/components/error-boundary";
+import PageLoading from "@/components/ui/page-loading";
+import NotFoundPage from "@/pages/not-found";
 import { BASE_PATH } from "@/lib/consts";
 
 const LoginPage = lazy(() => import("@/pages/auth/login"));
@@ -16,7 +23,12 @@ const router = createBrowserRouter(
     {
       path: "/auth",
       Component: AuthLayout,
+      errorElement: <RouteErrorElement />,
       children: [
+        {
+          index: true,
+          element: <Navigate to="login" replace />,
+        },
         {
           path: "login",
           Component: LoginPage,
@@ -26,6 +38,7 @@ const router = createBrowserRouter(
     {
       path: "/",
       Component: MainLayout,
+      errorElement: <RouteErrorElement />,
       children: [
         {
           index: true,
@@ -46,6 +59,10 @@ const router = createBrowserRouter(
           path: "keys",
           Component: KeysPage,
         },
+        {
+          path: "*",
+          Component: NotFoundPage,
+        },
       ],
     },
   ],
@@ -56,7 +73,7 @@ const router = createBrowserRouter(
 
 const Router = () => {
   return (
-    <Suspense>
+    <Suspense fallback={<PageLoading className="min-h-svh py-0" />}>
       <RouterProvider router={router} />
     </Suspense>
   );

@@ -15,31 +15,67 @@ import {
 import { cn, readableBytes, ucfirst } from "@/lib/utils";
 import { useBuckets } from "../buckets/hooks";
 import { useMemo } from "react";
+import { Alert } from "react-daisyui";
+import { CircleXIcon } from "lucide-react";
+import Button from "@/components/ui/button";
+import PageLoading from "@/components/ui/page-loading";
 
 const HomePage = () => {
-  const { data: health } = useNodesHealth();
-  const { data: buckets } = useBuckets();
+  const {
+    data: health,
+    isLoading: healthLoading,
+    isError: healthFailed,
+    error: healthError,
+    refetch: refetchHealth,
+  } = useNodesHealth();
+  const {
+    data: buckets,
+    isLoading: bucketsLoading,
+    isError: bucketsFailed,
+    error: bucketsError,
+    refetch: refetchBuckets,
+  } = useBuckets();
 
   const totalUsage = useMemo(() => {
     return buckets?.reduce((acc, bucket) => acc + bucket.bytes, 0);
   }, [buckets]);
 
+  const isLoading = healthLoading || bucketsLoading;
+  const isError = healthFailed || bucketsFailed;
+  const error = healthError || bucketsError;
+
+  const retry = () => {
+    refetchHealth();
+    refetchBuckets();
+  };
+
   return (
     <div className="container">
       <Page title="Dashboard" />
+
+      {isLoading && <PageLoading />}
+
+      {isError && (
+        <Alert status="error" icon={<CircleXIcon />}>
+          <span>{error?.message}</span>
+          <Button onClick={retry}>Retry</Button>
+        </Alert>
+      )}
 
       <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
         <StatsCard
           title="Status"
           icon={Leaf}
-          value={ucfirst(health?.status)}
+          value={health?.status ? ucfirst(health.status) : undefined}
           valueClassName={cn(
             "text-lg",
             health?.status === "healthy"
               ? "text-success"
               : health?.status === "degraded"
                 ? "text-warning"
-                : "text-error"
+                : health?.status
+                  ? "text-error"
+                  : undefined
           )}
         />
         <StatsCard title="Nodes" icon={HardDrive} value={health?.knownNodes} />
