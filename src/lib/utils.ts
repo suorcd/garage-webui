@@ -64,3 +64,11 @@ export const copyToClipboard = async (text: string) => {
 export const url = (...paths: unknown[]) => {
   return BASE_PATH + paths.join("/");
 };
+
+// encodePath escapes each segment of a path, so a key with #, ?, or a
+// space keeps its separators and reaches the backend intact.
+export const encodePath = (path: string) =>
+  path
+    .split("/")
+    .map(encodeURIComponent)
+    .join("/");

@@ -191,4 +191,23 @@ describe("ObjectList object view", () => {
       "noopener,noreferrer"
     );
   });
+
+  it("passes an already escaped object URL through unchanged", async () => {
+    browseResult.objects = [
+      {
+        objectKey: "report#1.pdf",
+        url: "/browse/bucket-b/report%231.pdf",
+        size: 10,
+        lastModified: new Date("2026-01-01T00:00:00Z"),
+      },
+    ];
+    const user = userEvent.setup();
+    renderList();
+
+    await user.click(screen.getByRole("button", { name: /report/ }));
+
+    const opened = vi.mocked(window.open).mock.calls[0][0] as string;
+    expect(opened).toContain("report%231.pdf?view=1");
+    expect(opened).not.toContain("%2523");
+  });
 });

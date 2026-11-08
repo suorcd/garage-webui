@@ -6,7 +6,7 @@ import { useEffect, useMemo, useState } from "react";
 import Input from "@/components/ui/input";
 import Button from "@/components/ui/button";
 import { Copy, FileWarningIcon } from "lucide-react";
-import { copyToClipboard } from "@/lib/utils";
+import { copyToClipboard, encodePath } from "@/lib/utils";
 import Checkbox from "@/components/ui/checkbox";
 
 export const shareDialog = createDisclosure<{ key: string; prefix: string }>();
@@ -35,7 +35,12 @@ const ShareDialog = () => {
     }
   }, [domains, domain, bucketName]);
 
-  const url = "http://" + domain + "/" + data?.prefix + data?.key;
+  const url =
+    "http://" +
+    domain +
+    "/" +
+    encodePath(data?.prefix ?? "") +
+    encodePath(data?.key ?? "");
 
   return (
     <Modal ref={dialogRef} open={isOpen} backdrop>

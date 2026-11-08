@@ -1,4 +1,5 @@
 import api from "@/lib/api";
+import { encodePath } from "@/lib/utils";
 import {
   useInfiniteQuery,
   useMutation,
@@ -37,7 +38,7 @@ export const useBrowseObjectsInfinite = (
       if (pageParam) {
         params.next = pageParam;
       }
-      return api.get<GetObjectsResult>(`/browse/${bucket}`, { params });
+      return api.get<GetObjectsResult>(`/browse/${encodeURIComponent(bucket)}`, { params });
     },
     initialPageParam: initialToken,
     getNextPageParam: (lastPage) => lastPage.nextToken ?? undefined,
@@ -55,7 +56,10 @@ export const usePutObject = (
         formData.append("file", body.file);
       }
 
-      return api.put(`/browse/${bucket}/${body.key}`, { body: formData });
+      return api.put(
+        `/browse/${encodeURIComponent(bucket)}/${encodePath(body.key)}`,
+        { body: formData }
+      );
     },
     ...options,
   });
@@ -71,9 +75,12 @@ export const useDeleteObject = (
 ) => {
   return useMutation({
     mutationFn: (data) =>
-      api.delete<DeleteObjectResult>(`/browse/${bucket}/${data.key}`, {
-        params: { recursive: data.recursive },
-      }),
+      api.delete<DeleteObjectResult>(
+        `/browse/${encodeURIComponent(bucket)}/${encodePath(data.key)}`,
+        {
+          params: { recursive: data.recursive },
+        }
+      ),
     ...options,
   });
 };

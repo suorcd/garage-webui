@@ -3,15 +3,21 @@ import { renderHook, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { ReactNode } from "react";
 
-const { apiGet } = vi.hoisted(() => ({
+const { apiGet, apiPut, apiDelete } = vi.hoisted(() => ({
   apiGet: vi.fn(),
+  apiPut: vi.fn(),
+  apiDelete: vi.fn(),
 }));
 
 vi.mock("@/lib/api", () => ({
-  default: { get: apiGet, post: vi.fn() },
+  default: { get: apiGet, post: vi.fn(), put: apiPut, delete: apiDelete },
 }));
 
-import { useBrowseObjectsInfinite } from "./hooks";
+import {
+  useBrowseObjectsInfinite,
+  useDeleteObject,
+  usePutObject,
+} from "./hooks";
 
 function wrapper({ children }: { children: ReactNode }) {
   const queryClient = new QueryClient({
@@ -123,5 +129,65 @@ describe("useBrowseObjectsInfinite", () => {
     expect(apiGet).toHaveBeenCalledWith("/browse/bucket-b", {
       params: { prefix: "", limit: 1000, next: "token-9" },
     });
+  });
+});
+
+describe("usePutObject", () => {
+  beforeEach(() => {
+    apiPut.mockClear();
+  });
+
+  it("encodes each segment of the key in the upload URL", async () => {
+    apiPut.mockResolvedValueOnce({});
+
+    const { result } = renderHook(() => usePutObject("bucket-b"), {
+      wrapper,
+    });
+
+    await result.current.mutateAsync({
+      key: "photos/report #1?.pdf",
+      file: new File(["x"], "report #1?.pdf"),
+    });
+
+    expect(apiPut).toHaveBeenCalledTimes(1);
+    expect(apiPut.mock.calls[0][0]).toBe(
+      "/browse/bucket-b/photos/report%20%231%3F.pdf"
+    );
+  });
+});
+
+describe("useDeleteObject", () => {
+  beforeEach(() => {
+    apiDelete.mockClear();
+  });
+
+  it("encodes each segment of the key in the delete URL", async () => {
+    apiDelete.mockResolvedValueOnce({});
+
+    const { result } = renderHook(() => useDeleteObject("bucket-b"), {
+      wrapper,
+    });
+
+    await result.current.mutateAsync({ key: "report #1?.pdf" });
+
+    expect(apiDelete).toHaveBeenCalledTimes(1);
+    expect(apiDelete.mock.calls[0][0]).toBe(
+      "/browse/bucket-b/report%20%231%3F.pdf"
+    );
+  });
+
+  it("encodes a nested key segment by segment", async () => {
+    apiDelete.mockResolvedValueOnce({});
+
+    const { result } = renderHook(() => useDeleteObject("bucket-b"), {
+      wrapper,
+    });
+
+    await result.current.mutateAsync({ key: "photos/2024/a?b.txt" });
+
+    expect(apiDelete).toHaveBeenCalledTimes(1);
+    expect(apiDelete.mock.calls[0][0]).toBe(
+      "/browse/bucket-b/photos/2024/a%3Fb.txt"
+    );
   });
 });

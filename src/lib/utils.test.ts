@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { toast } from "sonner";
-import { readableBytes, copyToClipboard } from "./utils";
+import { readableBytes, copyToClipboard, encodePath } from "./utils";
 
 vi.mock("sonner", () => ({
   toast: { success: vi.fn(), error: vi.fn(), warning: vi.fn() },
@@ -31,6 +31,23 @@ describe("readableBytes", () => {
     expect(readableBytes()).toBe("n/a");
     expect(readableBytes(null)).toBe("n/a");
     expect(readableBytes(NaN)).toBe("n/a");
+  });
+});
+
+describe("encodePath", () => {
+  it("encodes #, ?, and spaces in one segment", () => {
+    expect(encodePath("report #1?.pdf")).toBe("report%20%231%3F.pdf");
+  });
+
+  it("keeps the slash separators and encodes each segment", () => {
+    expect(encodePath("photos/2024/a?b.txt")).toBe(
+      "photos/2024/a%3Fb.txt"
+    );
+  });
+
+  it("keeps an empty path empty and a trailing slash trailing", () => {
+    expect(encodePath("")).toBe("");
+    expect(encodePath("photos/")).toBe("photos/");
   });
 });
 

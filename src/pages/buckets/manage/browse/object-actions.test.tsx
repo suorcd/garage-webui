@@ -203,4 +203,35 @@ describe("ObjectActions download", () => {
       "noopener,noreferrer"
     );
   });
+
+  it("passes an already escaped object URL through unchanged", async () => {
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    const user = userEvent.setup();
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <table>
+          <tbody>
+            <tr>
+              <ObjectActions
+                prefix=""
+                object={{
+                  objectKey: "report#1.pdf",
+                  url: "/browse/bucket-1/report%231.pdf",
+                }}
+              />
+            </tr>
+          </tbody>
+        </table>
+      </QueryClientProvider>
+    );
+
+    await user.click(screen.getAllByRole("button")[0]);
+
+    const opened = vi.mocked(window.open).mock.calls[0][0] as string;
+    expect(opened).toContain("report%231.pdf?dl=1");
+    expect(opened).not.toContain("%2523");
+  });
 });
