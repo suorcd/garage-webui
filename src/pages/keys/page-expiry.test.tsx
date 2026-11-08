@@ -1,10 +1,12 @@
+// The expiry column must not depend on the browser zone, so pin one.
+process.env.TZ = "America/Los_Angeles";
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { PageContextProvider } from "@/context/page-context";
-import { dayjs } from "@/lib/utils";
+import { formatExpiryDate } from "@/lib/utils";
 
 const { keysData, mockApiGet, mockRefetch } = vi.hoisted(() => {
   const now = Date.now();
@@ -127,7 +129,7 @@ describe("KeysPage", () => {
   it("shows the expiration date for a key with a future expiration", () => {
     renderPage();
 
-    const expected = dayjs(keysData[0].expiration).format("YYYY-MM-DD");
+    const expected = formatExpiryDate(keysData[0].expiration as string);
     expect(screen.getByText(expected)).toBeTruthy();
   });
 
@@ -188,5 +190,25 @@ describe("KeysPage", () => {
 
     expect(screen.queryByText("s3cr3t-value")).toBeNull();
     expect(screen.getAllByRole("button", { name: "View" })).toHaveLength(5);
+  });
+
+  it("shows the UTC date for an expiry just after midnight UTC", () => {
+    const edge = {
+      id: "GKEDGE",
+      name: "edge",
+      created: "2026-01-01T00:00:00Z",
+      expiration: "2026-11-08T02:00:00Z",
+      expired: false,
+    };
+    keysData.push(edge);
+
+    try {
+      renderPage();
+
+      expect(screen.getByText("2026-11-08 UTC")).toBeTruthy();
+      expect(screen.queryByText("2026-11-07 UTC")).toBeNull();
+    } finally {
+      keysData.pop();
+    }
   });
 });

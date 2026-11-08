@@ -5,7 +5,7 @@ import { Alert, Badge, Card, Input, Table } from "react-daisyui";
 import { useKeys, useRemoveKey } from "./hooks";
 import CreateKeyDialog from "./components/create-key-dialog";
 import { toast } from "sonner";
-import { copyToClipboard, dayjs, handleError } from "@/lib/utils";
+import { copyToClipboard, dayjs, formatExpiryDate, handleError } from "@/lib/utils";
 import { useCallback, useMemo, useState } from "react";
 import api from "@/lib/api";
 import { Key } from "./types";
@@ -170,7 +170,7 @@ const KeysPage = () => {
                   </div>
                   <span>
                     {key.expiration
-                      ? dayjs(key.expiration).format("YYYY-MM-DD")
+                      ? formatExpiryDate(key.expiration)
                       : "Never"}
                     {isExpired(key) ? (
                       <Badge color="error" className="ml-2">

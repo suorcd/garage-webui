@@ -4,6 +4,7 @@ import {
   readableBytes,
   copyToClipboard,
   encodePath,
+  formatExpiryDate,
   parseReturnTo,
 } from "./utils";
 
@@ -120,4 +121,14 @@ describe("parseReturnTo", () => {
     expect(parseReturnTo("/auth")).toBe("/");
     expect(parseReturnTo("/auth/login")).toBe("/");
   });
+
+describe("formatExpiryDate", () => {
+  it("renders the UTC date and names the zone", () => {
+    expect(formatExpiryDate("2026-11-08T02:00:00Z")).toBe("2026-11-08 UTC");
+  });
+
+  it("keeps the same date for an instant late in the UTC day", () => {
+    expect(formatExpiryDate("2026-11-08T23:30:00Z")).toBe("2026-11-08 UTC");
+  });
+});
 });
