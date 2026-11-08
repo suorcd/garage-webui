@@ -1,5 +1,5 @@
 import { PageContext } from "@/context/page-context";
-import { Suspense, useContext, useEffect } from "react";
+import { Suspense, useContext, useEffect, useRef } from "react";
 import { Navigate, Outlet, useLocation, useNavigate } from "react-router-dom";
 import Sidebar from "../containers/sidebar";
 import { ArrowLeft, MenuIcon } from "lucide-react";
@@ -13,9 +13,17 @@ const MainLayout = () => {
   const { pathname } = useLocation();
   const auth = useAuth();
 
+  // The effect below must run only when the path changes. It reads the
+  // disclosure through a ref, so a re-render never closes the sidebar.
+  const sidebarRef = useRef(sidebar);
+
   useEffect(() => {
-    if (sidebar.isOpen) {
-      sidebar.onClose();
+    sidebarRef.current = sidebar;
+  });
+
+  useEffect(() => {
+    if (sidebarRef.current.isOpen) {
+      sidebarRef.current.onClose();
     }
   }, [pathname]);
 
@@ -24,7 +32,7 @@ const MainLayout = () => {
   }
 
   if (!auth.isAuthenticated) {
-    return <Navigate to="/auth/login" />;
+    return <Navigate to="/auth/login" replace />;
   }
 
   return (
@@ -59,7 +67,6 @@ const Header = ({ onSidebarOpen }: HeaderProps) => {
       <div className="container h-16 md:h-20 flex flex-row items-center gap-4">
         {page?.prev ? (
           <Button
-            href={page.prev}
             onClick={() => navigate(page.prev!, { replace: true })}
             color="ghost"
             shape="circle"
@@ -67,18 +74,16 @@ const Header = ({ onSidebarOpen }: HeaderProps) => {
           >
             <ArrowLeft />
           </Button>
-        ) : (
-          <Button
-            icon={MenuIcon}
-            color="ghost"
-            className="md:hidden -mx-2"
-            onClick={onSidebarOpen}
-          />
-        )}
+        ) : null}
 
-        <h1 className="text-xl flex-1 truncate">
-          {page?.title || "Dashboard"}
-        </h1>
+        <Button
+          icon={MenuIcon}
+          color="ghost"
+          className="md:hidden -mx-2"
+          onClick={onSidebarOpen}
+        />
+
+        <h1 className="text-xl flex-1 truncate">{page?.title ?? ""}</h1>
 
         {page?.actions}
       </div>
