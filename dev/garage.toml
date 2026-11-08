@@ -18,6 +18,11 @@ s3_region = "garage"
 api_bind_addr = "127.0.0.1:3900"
 root_domain = ".s3.localhost"
 
+[s3_web]
+bind_addr = "127.0.0.1:3902"
+root_domain = ".web.localhost"
+index = "index.html"
+
 [admin]
 api_bind_addr = "127.0.0.1:3903"
 admin_token = "dev-admin-token"
