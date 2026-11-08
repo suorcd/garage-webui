@@ -22,8 +22,11 @@ function wrapper({ children }: { children: ReactNode }) {
   );
 }
 
+const nodeId =
+  "e09e9377a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6";
+
 const nodeInfo = {
-  nodeId: "self",
+  nodeId,
   garageVersion: "2.5.0",
   garageFeatures: [],
   rustVersion: "1.85.0",
@@ -31,9 +34,9 @@ const nodeInfo = {
 };
 
 describe("useNodeInfo", () => {
-  it("selects the self node from the success map", async () => {
+  it("selects the node from the success map keyed by node id", async () => {
     apiGet.mockResolvedValueOnce({
-      success: { self: nodeInfo },
+      success: { [nodeId]: nodeInfo },
       error: {},
     });
 
@@ -44,10 +47,10 @@ describe("useNodeInfo", () => {
     expect(result.current.data).toEqual({ node: nodeInfo, error: undefined });
   });
 
-  it("surfaces the self node error instead of a blank node", async () => {
+  it("surfaces the node error from the error map keyed by node id", async () => {
     apiGet.mockResolvedValueOnce({
       success: {},
-      error: { self: "connection refused" },
+      error: { [nodeId]: "connection refused" },
     });
 
     const { result } = renderHook(() => useNodeInfo(), { wrapper });

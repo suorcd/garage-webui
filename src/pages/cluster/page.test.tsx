@@ -9,6 +9,8 @@ const { nodeInfoState } = vi.hoisted(() => ({
       | { garageVersion: string; dbEngine: string }
       | undefined,
     error: undefined as string | undefined,
+    isError: false,
+    queryError: undefined as Error | undefined,
   },
 }));
 
@@ -16,6 +18,8 @@ vi.mock("./hooks", () => ({
   useClusterStatus: () => ({ data: { layoutVersion: 3, nodes: [] } }),
   useNodeInfo: () => ({
     data: { node: nodeInfoState.node, error: nodeInfoState.error },
+    isError: nodeInfoState.isError,
+    error: nodeInfoState.queryError,
   }),
 }));
 
@@ -48,6 +52,8 @@ describe("ClusterPage", () => {
   beforeEach(() => {
     nodeInfoState.node = undefined;
     nodeInfoState.error = undefined;
+    nodeInfoState.isError = false;
+    nodeInfoState.queryError = undefined;
   });
 
   it("surfaces a node-info error instead of blank details", () => {
@@ -56,6 +62,15 @@ describe("ClusterPage", () => {
     renderPage();
 
     expect(screen.getByText(/connection refused/)).toBeTruthy();
+  });
+
+  it("shows a node-info query error instead of blank details", () => {
+    nodeInfoState.isError = true;
+    nodeInfoState.queryError = new Error("InvalidRequest");
+
+    renderPage();
+
+    expect(screen.getByText(/InvalidRequest/)).toBeTruthy();
   });
 
   it("shows the node details when node info loads", () => {

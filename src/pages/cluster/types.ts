@@ -28,7 +28,7 @@ export type GetStatusResult = {
 
 export type Node = {
   id: string;
-  role?: Role | StagedRole;
+  role?: NodeAssignedRole | Role | StagedRole;
   addr: string | null;
   hostname: string | null;
   isUp: boolean;
@@ -47,6 +47,12 @@ export type Role = {
   id: string;
   zone: string;
   capacity: number;
+  tags: string[];
+};
+
+export type NodeAssignedRole = {
+  zone: string;
+  capacity: number | null;
   tags: string[];
 };
 

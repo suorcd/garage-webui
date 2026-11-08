@@ -16,8 +16,12 @@ const { apiGet, apiPost, revertMutate, layoutData, newLayoutData } =
       version: 3,
       roles: [
         { id: "node-a", zone: "dc1", capacity: 5 * 1000 ** 3, tags: ["fast"] },
+        { id: "node-c", zone: "dc3", capacity: 3 * 1000 ** 3, tags: ["cold"] },
       ],
-      stagedRoleChanges: [{ id: "node-a", remove: true }],
+      stagedRoleChanges: [
+        { id: "node-a", remove: true },
+        { id: "node-c", remove: true },
+      ],
     } as GetClusterLayoutResult,
     newLayoutData: {
       version: 4,
@@ -64,7 +68,7 @@ const nodes: Node[] = [
     addr: "10.0.0.1:3903",
     isUp: true,
     lastSeenSecsAgo: 5,
-    role: { id: "node-a", zone: "dc1", capacity: 5 * GB, tags: ["fast"] },
+    role: { zone: "dc1", capacity: 5 * GB, tags: ["fast"] },
     dataPartition: { available: 0, total: 0 },
   },
   {
@@ -74,6 +78,14 @@ const nodes: Node[] = [
     isUp: false,
     lastSeenSecsAgo: null,
     dataPartition: { available: 100, total: 1000 },
+  },
+  {
+    id: "node-c",
+    hostname: "gamma",
+    addr: "10.0.0.3:3903",
+    isUp: true,
+    lastSeenSecsAgo: 2,
+    dataPartition: { available: 50, total: 500 },
   },
 ];
 
@@ -143,6 +155,20 @@ describe("NodesList", () => {
     });
   });
 
+  it("prefills the committed role for a removal-staged node with no status role", async () => {
+    renderList(newClient());
+    await waitFor(() => expect(screen.getByText("node-c")).toBeTruthy());
+
+    fireEvent.click(screen.getAllByText("Assign")[2]);
+
+    expect(assignNodeDialog.store.getState().data).toEqual({
+      nodeId: "node-c",
+      zone: "dc3",
+      capacity: 3 * GB,
+      tags: ["cold"],
+    });
+  });
+
   it("prefills the staged role when re-assigning a non-removal staged node", async () => {
     layoutData.stagedRoleChanges = [
       { id: "node-a", remove: false, zone: "dc2", capacity: 2 * GB, tags: ["slow"] },
@@ -160,7 +186,10 @@ describe("NodesList", () => {
         tags: ["slow"],
       });
     } finally {
-      layoutData.stagedRoleChanges = [{ id: "node-a", remove: true }];
+      layoutData.stagedRoleChanges = [
+        { id: "node-a", remove: true },
+        { id: "node-c", remove: true },
+      ];
     }
   });
 

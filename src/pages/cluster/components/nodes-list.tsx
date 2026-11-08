@@ -79,7 +79,7 @@ const NodesList = ({ nodes }: NodeListProps) => {
         return true;
       })
       .map((item) => {
-        const committedRole = data?.roles?.find((r) => r.id === item.role?.id);
+        const committedRole = data?.roles?.find((r) => r.id === item.id);
         const stagedChanges = data?.stagedRoleChanges?.find(
           (i) => i.id === item.id
         );

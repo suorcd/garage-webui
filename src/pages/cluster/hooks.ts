@@ -25,8 +25,10 @@ export const useNodeInfo = () => {
         params: { node: "self" },
       }),
     select: (data) => ({
-      node: data?.success?.["self"],
-      error: data?.error?.["self"],
+      // GetNodeInfo keys success and error by the node hex id, even when
+      // the query asks for node=self, so take the first entry of each map.
+      node: Object.values(data?.success || {})[0],
+      error: Object.values(data?.error || {})[0],
     }),
   });
 };

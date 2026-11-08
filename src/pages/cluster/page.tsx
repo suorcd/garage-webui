@@ -7,7 +7,11 @@ import { CircleXIcon } from "lucide-react";
 
 const ClusterPage = () => {
   const { data } = useClusterStatus();
-  const { data: nodeInfo } = useNodeInfo();
+  const {
+    data: nodeInfo,
+    isError: nodeInfoFailed,
+    error: nodeInfoError,
+  } = useNodeInfo();
   const node = nodeInfo?.node;
 
   const nodes = useMemo(() => {
@@ -31,9 +35,11 @@ const ClusterPage = () => {
         <Card.Body className="gap-1">
           <Card.Title className="mb-2">Details</Card.Title>
 
-          {nodeInfo?.error != null && (
+          {(nodeInfo?.error != null || nodeInfoFailed) && (
             <Alert status="error" icon={<CircleXIcon />}>
-              <span>Node info error: {nodeInfo.error}</span>
+              <span>
+                Node info error: {nodeInfo?.error || nodeInfoError?.message}
+              </span>
             </Alert>
           )}
 
