@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"errors"
 	"io"
 	"net"
@@ -89,6 +90,124 @@ func TestValidateGarageConfigRejectsEmptyToken(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "token") {
 		t.Errorf("expected the error to name the token, got %q", err.Error())
+	}
+}
+
+func TestBasePathTrailingSlashRoutesAPI(t *testing.T) {
+	t.Setenv("AUTH_DISABLED", "true")
+	t.Setenv("AUTH_USER_PASS", "")
+
+	mux, err := newMux("/garage/")
+	if err != nil {
+		t.Fatalf("expected no error for a trailing-slash BASE_PATH, got %v", err)
+	}
+	sessionMgr := utils.InitSessionManager()
+	handler := sessionMgr.LoadAndSave(mux)
+
+	req := httptest.NewRequest(http.MethodGet, "/garage/api/auth/status", nil)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected GET /garage/api/auth/status to reach the API, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	var status map[string]bool
+	if err := json.Unmarshal(rec.Body.Bytes(), &status); err != nil {
+		t.Fatalf("cannot decode response: %v", err)
+	}
+	if !status["authenticated"] {
+		t.Error("expected authenticated true when auth is disabled, got false")
+	}
+}
+
+func TestBasePathTrailingSlashRedirectsToTrimmedPath(t *testing.T) {
+	mux, err := newMux("/garage/")
+	if err != nil {
+		t.Fatalf("expected no error for a trailing-slash BASE_PATH, got %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusMovedPermanently {
+		t.Fatalf("expected a redirect from /, got %d", rec.Code)
+	}
+	if got := rec.Header().Get("Location"); got != "/garage" {
+		t.Errorf("expected a redirect to the trimmed path /garage, got %q", got)
+	}
+}
+
+func TestBasePathWithoutTrailingSlashRoutesAPI(t *testing.T) {
+	t.Setenv("AUTH_DISABLED", "true")
+	t.Setenv("AUTH_USER_PASS", "")
+
+	mux, err := newMux("/garage")
+	if err != nil {
+		t.Fatalf("expected no error for BASE_PATH without a trailing slash, got %v", err)
+	}
+	sessionMgr := utils.InitSessionManager()
+	handler := sessionMgr.LoadAndSave(mux)
+
+	req := httptest.NewRequest(http.MethodGet, "/garage/api/auth/status", nil)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected GET /garage/api/auth/status to reach the API, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestBasePathEmptyRoutesAPI(t *testing.T) {
+	t.Setenv("AUTH_DISABLED", "true")
+	t.Setenv("AUTH_USER_PASS", "")
+
+	mux, err := newMux("")
+	if err != nil {
+		t.Fatalf("expected no error for an empty BASE_PATH, got %v", err)
+	}
+	sessionMgr := utils.InitSessionManager()
+	handler := sessionMgr.LoadAndSave(mux)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/auth/status", nil)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected GET /api/auth/status to reach the API, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestValidateBasePathRejectsValueWithoutLeadingSlash(t *testing.T) {
+	err := validateBasePath("garage")
+	if err == nil {
+		t.Fatal("expected an error for a BASE_PATH without a leading slash, got none")
+	}
+	if !strings.Contains(err.Error(), "BASE_PATH") {
+		t.Errorf("expected the error to name BASE_PATH, got %q", err.Error())
+	}
+}
+
+func TestValidateBasePathAcceptsLeadingSlash(t *testing.T) {
+	if err := validateBasePath("/garage"); err != nil {
+		t.Errorf("expected a BASE_PATH with a leading slash to pass validation, got %v", err)
+	}
+}
+
+func TestValidateBasePathAcceptsEmpty(t *testing.T) {
+	if err := validateBasePath(""); err != nil {
+		t.Errorf("expected an empty BASE_PATH to pass validation, got %v", err)
+	}
+}
+
+func TestNewMuxRejectsValueWithoutLeadingSlash(t *testing.T) {
+	_, err := newMux("garage")
+	if err == nil {
+		t.Fatal("expected an error for a BASE_PATH without a leading slash, got none")
+	}
+	if !strings.Contains(err.Error(), "BASE_PATH") {
+		t.Errorf("expected the error to name BASE_PATH, got %q", err.Error())
 	}
 }
 
