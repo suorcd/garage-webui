@@ -1,4 +1,5 @@
 import api from "@/lib/api";
+import { handleError } from "@/lib/utils";
 import {
   MutationOptions,
   useMutation,
@@ -22,13 +23,32 @@ export const useBucket = (id?: string | null) => {
   });
 };
 
+export type UpdateBucketRequest = {
+  quotas?: {
+    maxObjects: number | null;
+    maxSize: number | null;
+  } | null;
+  websiteAccess?: {
+    enabled: boolean;
+    indexDocument?: string | null;
+    errorDocument?: string | null;
+  } | null;
+};
+
 export const useUpdateBucket = (id?: string | null) => {
+  const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (values: Record<string, unknown>) => {
+    mutationFn: (values: UpdateBucketRequest) => {
       return api.post<unknown>("/v2/UpdateBucket", {
         params: { id },
         body: values,
       });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["bucket", id] });
+    },
+    onError: (error) => {
+      handleError(error);
     },
   });
 };
