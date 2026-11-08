@@ -1,5 +1,7 @@
 # Garage Web UI Screenshots
 
+These screenshots show the upstream interface. They predate the current fork UI. Re-capture them after the interface settles.
+
 [![image](img/home.png)](img/home.png)
 [![image](img/cluster.png)](img/cluster.png)
 [![image](img/buckets.png)](img/buckets.png)
