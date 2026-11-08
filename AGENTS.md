@@ -195,10 +195,10 @@ nix build -L
 
 ### Test harness status
 
-- The backend has 12 Go test files: `backend/main_test.go`, `backend/router/*_test.go`,
-  and `backend/utils/garage_test.go`. The frontend has 13 vitest files under `src/`. Add
-  a new Go test as `<file>_test.go` in the package that holds the code, and call the
-  handler through the router with a real request.
+- The backend has Go tests in `backend/main_test.go`, `backend/router/*_test.go`, and
+  `backend/utils/garage_test.go`. The frontend has vitest files under `src/`. Add a new
+  Go test as `<file>_test.go` in the package that holds the code, and call the handler
+  through the router with a real request.
 - The frontend uses `vitest` with `jsdom` and Testing Library. Run `pnpm test`. Add a test
   as `*.test.tsx` next to the component. Render the component and act on it as a user does.
 
