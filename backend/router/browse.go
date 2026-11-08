@@ -11,6 +11,7 @@ import (
 	"khairul169/garage-webui/schema"
 	"khairul169/garage-webui/utils"
 	"log"
+	"mime"
 	"mime/multipart"
 	"net/http"
 	"strconv"
@@ -137,19 +138,22 @@ func (b *Browse) GetOneObject(w http.ResponseWriter, r *http.Request) {
 
 	defer object.Body.Close()
 	keys := strings.Split(key, "/")
+	filename := keys[len(keys)-1]
 
-	if download {
-		w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%s", keys[len(keys)-1]))
-	}
-
-	w.Header().Set("Cache-Control", "max-age=86400")
-	w.Header().Set("Last-Modified", object.LastModified.Format(time.RFC1123))
-
+	contentType := "application/octet-stream"
 	if object.ContentType != nil {
-		w.Header().Set("Content-Type", *object.ContentType)
-	} else {
-		w.Header().Set("Content-Type", "application/octet-stream")
+		contentType = *object.ContentType
 	}
+
+	if download || !isSafeInlineContentType(contentType) {
+		w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%s", filename))
+	}
+
+	w.Header().Set("Cache-Control", "private, max-age=86400")
+	w.Header().Set("Content-Security-Policy", "sandbox")
+	w.Header().Set("X-Content-Type-Options", "nosniff")
+	w.Header().Set("Last-Modified", object.LastModified.Format(time.RFC1123))
+	w.Header().Set("Content-Type", contentType)
 	if object.ContentLength != nil {
 		w.Header().Set("Content-Length", strconv.FormatInt(*object.ContentLength, 10))
 	}
@@ -162,6 +166,29 @@ func (b *Browse) GetOneObject(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		log.Printf("GetOneObject: cannot copy object body: %v", err)
 		return
+	}
+}
+
+// isSafeInlineContentType reports whether an object may be served inline
+// in the browser. Only images (except SVG, which can carry script), text
+// (except HTML), and PDF are safe. Everything else is served as an
+// attachment so it cannot execute in the UI origin.
+func isSafeInlineContentType(contentType string) bool {
+	mediaType, _, err := mime.ParseMediaType(contentType)
+	if err != nil {
+		return false
+	}
+
+	mediaType = strings.ToLower(mediaType)
+
+	switch mediaType {
+	case "image/svg+xml", "text/html":
+		return false
+	case "application/pdf":
+		return true
+	default:
+		return strings.HasPrefix(mediaType, "image/") ||
+			strings.HasPrefix(mediaType, "text/")
 	}
 }
 

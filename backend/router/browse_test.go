@@ -19,12 +19,13 @@ import (
 )
 
 type fakeS3 struct {
-	mu          sync.Mutex
-	keys        []string
-	deletedKeys []string
-	failedKeys  map[string]bool
-	listCalls   int
-	deleteCalls int
+	mu           sync.Mutex
+	keys         []string
+	deletedKeys  []string
+	failedKeys   map[string]bool
+	listCalls    int
+	deleteCalls  int
+	contentTypes map[string]string
 }
 
 type listBucketResult struct {
@@ -111,7 +112,17 @@ func (f *fakeS3) handleGet(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	http.Error(w, "unexpected request", http.StatusBadRequest)
+	contentType := f.contentTypes[key]
+	if contentType == "" {
+		contentType = "application/octet-stream"
+	}
+
+	body := "hello"
+	w.Header().Set("Content-Type", contentType)
+	w.Header().Set("Content-Length", strconv.Itoa(len(body)))
+	w.Header().Set("Last-Modified", time.Now().UTC().Format(http.TimeFormat))
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write([]byte(body))
 }
 
 func (f *fakeS3) handleList(w http.ResponseWriter, r *http.Request) {
@@ -272,6 +283,101 @@ func TestGetOneObjectCopyFailureReturnsOnlyObjectBytes(t *testing.T) {
 	}
 	if got := rec.Body.String(); got != "0123456789" {
 		t.Errorf("expected only the object bytes, got %q", got)
+	}
+}
+
+func TestGetOneObjectViewServesSafeTypesInline(t *testing.T) {
+	fake := &fakeS3{
+		contentTypes: map[string]string{
+			"photo.png":  "image/png",
+			"note.txt":   "text/plain",
+			"doc.pdf":    "application/pdf",
+			"photo2.png": "image/png; charset=binary",
+		},
+	}
+	newFakeS3Server(t, fake)
+	seedReadBucketAccess(t)
+
+	for _, key := range []string{"photo.png", "note.txt", "doc.pdf", "photo2.png"} {
+		t.Run(key, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet, "/browse/test-bucket/"+key+"?view=1", nil)
+			rec := httptest.NewRecorder()
+			testBrowseMux().ServeHTTP(rec, req)
+
+			if rec.Code != http.StatusOK {
+				t.Fatalf("expected status 200, got %d: %s", rec.Code, rec.Body.String())
+			}
+			if got := rec.Header().Get("Content-Disposition"); got != "" {
+				t.Errorf("expected no Content-Disposition for an inline type, got %q", got)
+			}
+			assertViewSecurityHeaders(t, rec)
+		})
+	}
+}
+
+func TestGetOneObjectViewForcesAttachmentForUnsafeTypes(t *testing.T) {
+	fake := &fakeS3{
+		contentTypes: map[string]string{
+			"page.html":  "text/html",
+			"pic.svg":    "image/svg+xml",
+			"blob.bin":   "application/octet-stream",
+			"page2.html": "text/html; charset=utf-8",
+			"PAGE.HTML":  "TEXT/HTML",
+		},
+	}
+	newFakeS3Server(t, fake)
+	seedReadBucketAccess(t)
+
+	for _, key := range []string{"page.html", "pic.svg", "blob.bin", "page2.html", "PAGE.HTML"} {
+		t.Run(key, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet, "/browse/test-bucket/"+key+"?view=1", nil)
+			rec := httptest.NewRecorder()
+			testBrowseMux().ServeHTTP(rec, req)
+
+			if rec.Code != http.StatusOK {
+				t.Fatalf("expected status 200, got %d: %s", rec.Code, rec.Body.String())
+			}
+			if got := rec.Header().Get("Content-Disposition"); !strings.HasPrefix(got, "attachment") {
+				t.Errorf("expected Content-Disposition attachment, got %q", got)
+			}
+			assertViewSecurityHeaders(t, rec)
+		})
+	}
+}
+
+func TestGetOneObjectDownloadKeepsAttachment(t *testing.T) {
+	fake := &fakeS3{
+		contentTypes: map[string]string{
+			"photo.png": "image/png",
+		},
+	}
+	newFakeS3Server(t, fake)
+	seedReadBucketAccess(t)
+
+	req := httptest.NewRequest(http.MethodGet, "/browse/test-bucket/photo.png?dl=1", nil)
+	rec := httptest.NewRecorder()
+	testBrowseMux().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	if got := rec.Header().Get("Content-Disposition"); !strings.HasPrefix(got, "attachment") {
+		t.Errorf("expected Content-Disposition attachment, got %q", got)
+	}
+	assertViewSecurityHeaders(t, rec)
+}
+
+func assertViewSecurityHeaders(t *testing.T, rec *httptest.ResponseRecorder) {
+	t.Helper()
+
+	if got := rec.Header().Get("Content-Security-Policy"); got != "sandbox" {
+		t.Errorf("expected Content-Security-Policy sandbox, got %q", got)
+	}
+	if got := rec.Header().Get("X-Content-Type-Options"); got != "nosniff" {
+		t.Errorf("expected X-Content-Type-Options nosniff, got %q", got)
+	}
+	if got := rec.Header().Get("Cache-Control"); !strings.Contains(got, "private") {
+		t.Errorf("expected Cache-Control to contain private, got %q", got)
 	}
 }
 
