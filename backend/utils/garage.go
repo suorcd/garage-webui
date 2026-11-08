@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"io"
 	"khairul169/garage-webui/schema"
-	"log"
 	"net/http"
 	"os"
 	"strings"
@@ -33,7 +32,7 @@ func (g *garage) LoadConfig() error {
 	var cfg schema.Config
 	err = toml.Unmarshal(data, &cfg)
 	if err != nil {
-		log.Fatal(err)
+		return err
 	}
 
 	g.Config = cfg

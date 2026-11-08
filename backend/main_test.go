@@ -5,9 +5,91 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"strings"
 	"testing"
 	"time"
+
+	"khairul169/garage-webui/schema"
+	"khairul169/garage-webui/utils"
 )
+
+func setGarageConfig(t *testing.T, cfg schema.Config) {
+	t.Helper()
+
+	old := utils.Garage.Config
+	utils.Garage.Config = cfg
+	t.Cleanup(func() { utils.Garage.Config = old })
+}
+
+func TestValidateGarageConfigAcceptsEnvOnlySetup(t *testing.T) {
+	t.Setenv("API_BASE_URL", "http://127.0.0.1:3903")
+	t.Setenv("API_ADMIN_KEY", "test-token")
+	setGarageConfig(t, schema.Config{})
+
+	if err := validateGarageConfig(); err != nil {
+		t.Errorf("expected an env-only setup to pass validation, got %v", err)
+	}
+}
+
+func TestValidateGarageConfigAcceptsConfigFile(t *testing.T) {
+	t.Setenv("API_BASE_URL", "")
+	t.Setenv("API_ADMIN_KEY", "")
+	setGarageConfig(t, schema.Config{
+		RPCPublicAddr: "127.0.0.1:3903",
+		Admin: schema.Admin{
+			APIBindAddr: "127.0.0.1:3903",
+			AdminToken:  "test-token",
+		},
+	})
+
+	if err := validateGarageConfig(); err != nil {
+		t.Errorf("expected a config file setup to pass validation, got %v", err)
+	}
+}
+
+func TestValidateGarageConfigRejectsEmptyEndpoint(t *testing.T) {
+	t.Setenv("API_BASE_URL", "")
+	t.Setenv("API_ADMIN_KEY", "test-token")
+	setGarageConfig(t, schema.Config{})
+
+	err := validateGarageConfig()
+	if err == nil {
+		t.Fatal("expected an error for an unresolvable endpoint, got none")
+	}
+	if !strings.Contains(err.Error(), "endpoint") {
+		t.Errorf("expected the error to name the endpoint, got %q", err.Error())
+	}
+}
+
+func TestValidateGarageConfigRejectsEndpointWithoutHost(t *testing.T) {
+	t.Setenv("API_BASE_URL", "")
+	t.Setenv("API_ADMIN_KEY", "test-token")
+	setGarageConfig(t, schema.Config{
+		Admin: schema.Admin{APIBindAddr: "127.0.0.1:3903"},
+	})
+
+	err := validateGarageConfig()
+	if err == nil {
+		t.Fatal("expected an error for an endpoint without a host, got none")
+	}
+	if !strings.Contains(err.Error(), "endpoint") {
+		t.Errorf("expected the error to name the endpoint, got %q", err.Error())
+	}
+}
+
+func TestValidateGarageConfigRejectsEmptyToken(t *testing.T) {
+	t.Setenv("API_BASE_URL", "http://127.0.0.1:3903")
+	t.Setenv("API_ADMIN_KEY", "")
+	setGarageConfig(t, schema.Config{})
+
+	err := validateGarageConfig()
+	if err == nil {
+		t.Fatal("expected an error for an empty admin token, got none")
+	}
+	if !strings.Contains(err.Error(), "token") {
+		t.Errorf("expected the error to name the token, got %q", err.Error())
+	}
+}
 
 func TestNewHTTPServerSetsTimeouts(t *testing.T) {
 	server := newHTTPServer(":3909", http.NewServeMux())
