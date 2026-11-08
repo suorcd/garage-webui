@@ -21,7 +21,7 @@ The Garage Web UI is available as a single executable binary and docker image. Y
 ### Docker CLI
 
 ```sh
-$ docker run -p 3909:3909 -v ./garage.toml:/etc/garage.toml:ro --restart unless-stopped --name garage-webui khairul169/garage-webui:latest
+$ docker run -p 3909:3909 -v ./garage.toml:/etc/garage.toml:ro --restart unless-stopped --name garage-webui ghcr.io/suorcd/garage-webui:latest
 ```
 
 A plain HTTP container adds `-e SESSION_COOKIE_SECURE=false` to that command. With Compose, set it in `.env`; `docker-compose.yml` forwards it.
@@ -37,7 +37,7 @@ If you install Garage using Docker, you can install this web UI alongside Garage
 ```yml
 services:
   garage:
-    image: dxflrs/garage:v2.0.0
+    image: dxflrs/garage:v2.5.0
     container_name: garage
     volumes:
       - ./garage.toml:/etc/garage.toml
@@ -51,9 +51,11 @@ services:
       - 3903:3903
 
   webui:
-    image: khairul169/garage-webui:latest
+    image: ghcr.io/suorcd/garage-webui:latest
     container_name: garage-webui
     restart: unless-stopped
+    depends_on:
+      - garage
     volumes:
       - ./garage.toml:/etc/garage.toml:ro
     ports:
@@ -66,13 +68,7 @@ services:
 
 ### Without Docker
 
-Get the latest binary from the [release page](https://github.com/khairul169/garage-webui/releases/latest) according to your OS architecture. For example:
-
-```sh
-$ wget -O garage-webui https://github.com/khairul169/garage-webui/releases/download/1.1.0/garage-webui-v1.1.0-linux-amd64
-$ chmod +x garage-webui
-$ sudo cp garage-webui /usr/local/bin
-```
+Get the latest binary from the [release page](https://github.com/suorcd/garage-webui/releases/latest) according to your OS architecture. No binary release exists yet. Until one exists, build it with `misc/build-binaries.sh` and copy the binary for your architecture to `/usr/local/bin`.
 
 Run the program with specified `garage.toml` config path.
 
@@ -179,11 +175,13 @@ However, if it fails to load, you can set `API_BASE_URL` & `API_ADMIN_KEY` envir
 Configurable envs:
 
 - `CONFIG_PATH`: Path to the Garage `config.toml` file. Defaults to `/etc/garage.toml`.
-- `BASE_PATH`: Base path or prefix for Web UI.
-- `API_BASE_URL`: Garage admin API endpoint URL.
-- `API_ADMIN_KEY`: Admin API key.
-- `S3_REGION`: S3 Region.
-- `S3_ENDPOINT_URL`: S3 Endpoint url.
+- `BASE_PATH`: Base path or prefix for Web UI. Empty by default.
+- `HOST`: Bind address for the web server. Defaults to `0.0.0.0`.
+- `PORT`: Port for the web server. Defaults to `3909`.
+- `API_BASE_URL`: Garage admin API endpoint URL. Without this value, the server derives the endpoint from `garage.toml`.
+- `API_ADMIN_KEY`: Admin API key. Without this value, the server uses the `admin_token` from `garage.toml`.
+- `S3_REGION`: S3 Region. Without this value, the server uses the `s3_region` from `garage.toml`, or `garage` when the file has none.
+- `S3_ENDPOINT_URL`: S3 Endpoint URL. Without this value, the server derives the endpoint from `garage.toml`.
 - `MAX_UPLOAD_SIZE`: Maximum upload size in bytes. Defaults to 5368709120 (5 GiB). The backend streams the upload to S3 and does not use a temporary file.
 - `MAX_THUMBNAIL_SIZE`: Maximum image size in bytes for thumbnail generation. Defaults to 5242880 (5 MiB). Larger images show a placeholder.
 - `AUTH_USER_PASS`: The login in `username:password_hash` format. The server refuses to start when this value is empty, unless `AUTH_DISABLED=true`.
@@ -268,7 +266,7 @@ When starting the pieces manually, export `CONFIG_PATH=./dev/garage.toml` and th
 Without Nix, install Node.js, pnpm, Go, Air, and Garage yourself:
 
 ```sh
-$ git clone https://github.com/khairul169/garage-webui.git
+$ git clone https://github.com/suorcd/garage-webui.git
 $ cd garage-webui && pnpm install
 ```
 
@@ -282,11 +280,10 @@ Start both the client and server concurrently:
 $ pnpm run dev # or npm run dev
 ```
 
-Or start each instance separately:
+Or start each instance separately, from the repository root:
 
 ```sh
 $ pnpm run dev:client
-$ cd backend
 $ pnpm run dev:server
 ```
 
@@ -294,4 +291,4 @@ $ pnpm run dev:server
 
 Make sure you are using the latest version of Garage. If the data cannot be loaded, please check whether your instance of Garage has the admin API enabled and the ports are accessible.
 
-If you encounter any problems, please do not hesitate to submit an issue [here](https://github.com/khairul169/garage-webui/issues). You can describe the problem and attach the error logs.
+If you encounter any problems, please do not hesitate to submit an issue [here](https://github.com/suorcd/garage-webui/issues). You can describe the problem and attach the error logs.
