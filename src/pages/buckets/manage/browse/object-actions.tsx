@@ -77,7 +77,7 @@ const ObjectActions = ({ prefix = "", object, end }: Props) => {
   });
 
   const onDownload = () => {
-    window.open(API_URL + object.url + "?dl=1", "_blank");
+    window.open(API_URL + object.url + "?dl=1", "_blank", "noopener,noreferrer");
   };
 
   const onDelete = () => {

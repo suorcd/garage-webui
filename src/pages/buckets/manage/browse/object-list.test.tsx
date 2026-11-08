@@ -1,4 +1,5 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -156,5 +157,38 @@ describe("ObjectList", () => {
     expect(
       dropdowns.every((d) => d.classList.contains("dropdown-bottom"))
     ).toBe(true);
+  });
+});
+
+describe("ObjectList object view", () => {
+  afterEach(() => {
+    cleanup();
+    vi.restoreAllMocks();
+  });
+
+  beforeEach(() => {
+    bucketContext.bucket.globalAliases = [];
+    browseResult.objects = [
+      {
+        objectKey: "file.txt",
+        url: "/browse/bucket-b/file.txt",
+        size: 10,
+        lastModified: new Date("2026-01-01T00:00:00Z"),
+      },
+    ];
+    vi.spyOn(window, "open").mockImplementation(() => null);
+  });
+
+  it("opens the object view in a new tab without opener access", async () => {
+    const user = userEvent.setup();
+    renderList();
+
+    await user.click(screen.getByRole("button", { name: /file\s*\.txt/ }));
+
+    expect(window.open).toHaveBeenCalledWith(
+      expect.stringContaining("?view=1"),
+      "_blank",
+      "noopener,noreferrer"
+    );
   });
 });

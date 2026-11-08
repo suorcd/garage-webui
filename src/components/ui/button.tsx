@@ -10,15 +10,22 @@ type ButtonProps = ComponentPropsWithoutRef<typeof BaseButton> & {
   icon?: LucideIcon;
 };
 
+const isExternalHref = (href: string) =>
+  href.startsWith("http://") || href.startsWith("https://");
+
 const Button = forwardRef<HTMLButtonElement, ButtonProps>(
-  ({ href, children, icon: Icon, shape, ...props }, ref) => {
+  ({ href, target, children, icon: Icon, shape, ...props }, ref) => {
+    const isExternal = href ? isExternalHref(href) : false;
+
     return (
       <BaseButton
         ref={ref}
-        tag={href ? Link : undefined}
-        shape={Icon && !children ? "circle" : shape}
+        tag={href ? (isExternal ? "a" : Link) : undefined}
+        shape={shape ?? (Icon && !children ? "circle" : undefined)}
         {...props}
-        {...(href ? { to: href } : {})}
+        {...(target ? { target } : {})}
+        {...(target === "_blank" ? { rel: "noopener noreferrer" } : {})}
+        {...(href ? (isExternal ? { href } : { to: href }) : {})}
       >
         {Icon ? <Icon size={18} className={children ? "-ml-1" : ""} /> : null}
         {children}
