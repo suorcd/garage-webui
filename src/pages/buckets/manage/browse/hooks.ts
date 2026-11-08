@@ -1,8 +1,10 @@
 import api from "@/lib/api";
 import {
+  useInfiniteQuery,
   useMutation,
   UseMutationOptions,
-  useQuery,
+  type InfiniteData,
+  type QueryKey,
 } from "@tanstack/react-query";
 import {
   DeleteObjectResult,
@@ -11,14 +13,34 @@ import {
   UseBrowserObjectOptions,
 } from "./types";
 
-export const useBrowseObjects = (
+// useBrowseObjectsInfinite pages through the object list with the
+// backend next token. Each page loads only when the caller asks for it.
+// The initial token restores the page the URL names after a refresh.
+export const useBrowseObjectsInfinite = (
   bucket: string,
-  options?: UseBrowserObjectOptions
+  options?: UseBrowserObjectOptions,
+  initialToken?: string
 ) => {
-  return useQuery({
-    queryKey: ["browse", bucket, options],
-    queryFn: () =>
-      api.get<GetObjectsResult>(`/browse/${bucket}`, { params: options }),
+  // The explicit generics keep the page param typed: without them the
+  // result data defaults to InfiniteData with an unknown page param,
+  // and the token read from pageParams loses its type.
+  return useInfiniteQuery<
+    GetObjectsResult,
+    Error,
+    InfiniteData<GetObjectsResult, string | undefined>,
+    QueryKey,
+    string | undefined
+  >({
+    queryKey: ["browse", bucket, options, "pages"],
+    queryFn: ({ pageParam }) => {
+      const params: UseBrowserObjectOptions = { ...options };
+      if (pageParam) {
+        params.next = pageParam;
+      }
+      return api.get<GetObjectsResult>(`/browse/${bucket}`, { params });
+    },
+    initialPageParam: initialToken,
+    getNextPageParam: (lastPage) => lastPage.nextToken ?? undefined,
   });
 };
 
