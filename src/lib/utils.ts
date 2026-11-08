@@ -72,3 +72,20 @@ export const encodePath = (path: string) =>
     .split("/")
     .map(encodeURIComponent)
     .join("/");
+
+// Accept only an in-app path for the post-login redirect. Reject absolute
+// URLs, protocol-relative URLs, backslashes, and paths back into /auth,
+// which would loop the login page. Fall back to the dashboard.
+export const parseReturnTo = (value: string | null | undefined): string => {
+  if (!value || !value.startsWith("/") || value.startsWith("//")) {
+    return "/";
+  }
+  // "/\evil.example" resolves to another origin in a browser.
+  if (value.includes("\\")) {
+    return "/";
+  }
+  if (value === "/auth" || value.startsWith("/auth/")) {
+    return "/";
+  }
+  return value;
+};

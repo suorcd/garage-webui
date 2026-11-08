@@ -5,16 +5,29 @@ import { useForm } from "react-hook-form";
 import { loginSchema } from "./schema";
 import { InputField } from "@/components/ui/input";
 import { useLogin } from "./hooks";
+import { useNavigate, useSearchParams } from "react-router-dom";
+import { parseReturnTo } from "@/lib/utils";
 
 export default function LoginPage() {
   const form = useForm({
     resolver: zodResolver(loginSchema),
     defaultValues: { username: "", password: "" },
   });
-  const login = useLogin();
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const returnTo = parseReturnTo(searchParams.get("returnTo"));
+  const login = useLogin({
+    onSuccess: () => navigate(returnTo, { replace: true }),
+  });
 
   return (
-    <form onSubmit={form.handleSubmit((v) => login.mutate(v))}>
+    <form
+      onSubmit={form.handleSubmit((v) => {
+        if (!login.isPending) {
+          login.mutate(v);
+        }
+      })}
+    >
       <Card className="w-full max-w-md" bordered>
         <Card.Body>
           <Card.Title tag="h2">Login</Card.Title>
@@ -43,6 +56,7 @@ export default function LoginPage() {
               color="primary"
               className="w-full md:w-auto min-w-[100px]"
               loading={login.isPending}
+              disabled={login.isPending}
             >
               Login
             </Button>

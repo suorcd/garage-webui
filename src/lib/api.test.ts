@@ -242,3 +242,62 @@ describe("api param serialisation", () => {
     expect(options.params).toEqual({ recursive: undefined });
   });
 });
+
+describe("api 401 redirect", () => {
+  const originalLocation = window.location;
+
+  function stubLocation(pathname: string, search = "") {
+    const redirects: string[] = [];
+    const location = {
+      origin: "http://localhost",
+      pathname,
+      search,
+      href: `http://localhost${pathname}${search}`,
+    };
+    Object.defineProperty(window, "location", {
+      value: new Proxy(location, {
+        set(target, prop, value) {
+          if (prop === "href") {
+            redirects.push(value as string);
+          }
+          return Reflect.set(target, prop, value as never);
+        },
+      }),
+      configurable: true,
+    });
+    return redirects;
+  }
+
+  afterEach(() => {
+    Object.defineProperty(window, "location", {
+      value: originalLocation,
+      configurable: true,
+    });
+  });
+
+  it("redirects to login with the current path as returnTo on a 401", async () => {
+    stubFetch(jsonResponse("", 401, "Unauthorized"));
+    const redirects = stubLocation("/buckets/abc", "?prefix=photos%2F");
+
+    const error = await apiError(api.get("/buckets"));
+
+    expect(error).toBeInstanceOf(APIError);
+    expect(error.status).toBe(401);
+    expect(redirects).toEqual([
+      "/auth/login?returnTo=%2Fbuckets%2Fabc%3Fprefix%3Dphotos%252F",
+    ]);
+  });
+
+  it("does not redirect for a 401 from an auth endpoint", async () => {
+    stubFetch(jsonResponse("", 401, "Unauthorized"));
+    const redirects = stubLocation("/auth/login");
+
+    const error = await apiError(
+      api.post("/auth/login", { body: { username: "a", password: "b" } }),
+    );
+
+    expect(error).toBeInstanceOf(APIError);
+    expect(error.status).toBe(401);
+    expect(redirects).toEqual([]);
+  });
+});

@@ -9,10 +9,11 @@ import { Drawer } from "react-daisyui";
 import { useAuth } from "@/hooks/useAuth";
 import { ErrorBoundary } from "@/components/error-boundary";
 import PageLoading from "@/components/ui/page-loading";
+import AuthErrorState from "./auth-error-state";
 
 const MainLayout = () => {
   const sidebar = useDisclosure();
-  const { pathname } = useLocation();
+  const { pathname, search } = useLocation();
   const auth = useAuth();
 
   // The effect below must run only when the path changes. It reads the
@@ -33,8 +34,17 @@ const MainLayout = () => {
     return <PageLoading className="min-h-svh py-0" />;
   }
 
+  if (auth.isError) {
+    return <AuthErrorState onRetry={() => auth.refetch()} />;
+  }
+
   if (!auth.isAuthenticated) {
-    return <Navigate to="/auth/login" replace />;
+    return (
+      <Navigate
+        to={`/auth/login?returnTo=${encodeURIComponent(pathname + search)}`}
+        replace
+      />
+    );
   }
 
   return (

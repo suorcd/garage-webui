@@ -13,9 +13,17 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import Page, { PageContextProvider } from "@/context/page-context";
 
 const { authState, locationProbe } = vi.hoisted(() => ({
-  authState: { isLoading: false, isEnabled: true, isAuthenticated: true },
+  authState: {
+    isLoading: false,
+    isEnabled: true,
+    isAuthenticated: true,
+    isError: false,
+    error: null as Error | null,
+    refetch: vi.fn(),
+  },
   locationProbe: {
     pathname: "",
+    search: "",
     action: "",
     navigate: (() => {}) as NavigateFunction,
   },
@@ -36,6 +44,7 @@ function LocationProbe() {
   const navigationType = useNavigationType();
   const navigate = useNavigate();
   locationProbe.pathname = location.pathname;
+  locationProbe.search = location.search;
   locationProbe.action = navigationType;
   locationProbe.navigate = navigate;
   return null;
@@ -93,6 +102,32 @@ describe("MainLayout", () => {
     authState.isLoading = false;
     authState.isEnabled = true;
     authState.isAuthenticated = true;
+    authState.isError = false;
+    authState.error = null;
+    authState.refetch.mockClear();
+  });
+
+  it("carries the current path as returnTo when it redirects to login", () => {
+    authState.isAuthenticated = false;
+    renderLayout(["/buckets/abc"], 0);
+
+    expect(locationProbe.pathname).toBe("/auth/login");
+    expect(locationProbe.search).toBe("?returnTo=%2Fbuckets%2Fabc");
+    expect(screen.getByText("login page")).toBeTruthy();
+  });
+
+  it("shows an error state with retry when the status query fails", async () => {
+    const user = userEvent.setup();
+    authState.isError = true;
+    authState.error = new Error("boom");
+    renderLayout(["/buckets/abc"], 0);
+
+    expect(screen.getByText(/Could not reach the server/)).toBeTruthy();
+    expect(screen.queryByText("login page")).toBeNull();
+
+    await user.click(screen.getByRole("button", { name: "Retry" }));
+
+    expect(authState.refetch).toHaveBeenCalledTimes(1);
   });
 
   it("replaces the history entry when it redirects to login", async () => {
