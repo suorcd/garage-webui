@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"io"
 	"net"
 	"net/http"
@@ -48,7 +49,13 @@ func TestNewHTTPServerClosesHeaderlessConnection(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected the server to close a connection that sends no headers")
 	}
-	if err != io.EOF {
-		t.Errorf("expected the server to close the connection, got %v", err)
+	if errors.Is(err, io.EOF) {
+		return
 	}
+	var netErr net.Error
+	if errors.As(err, &netErr) && netErr.Timeout() {
+		t.Errorf("expected the server to close the connection, got a read timeout: %v", err)
+	}
+	// Any other error (for example, a reset on a loaded runner) still
+	// shows that the server closed the connection.
 }

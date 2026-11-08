@@ -187,6 +187,10 @@ Configurable envs:
 - `AUTH_USER_PASS`: The login in `username:password_hash` format. The server refuses to start when this value is empty, unless `AUTH_DISABLED=true`.
 - `AUTH_DISABLED`: Set to `true` to disable authentication for local development. The server logs a warning. Do not use this value in production.
 
+The server uses a 10 second `ReadHeaderTimeout` and a 120 second `IdleTimeout`. It sets no `WriteTimeout`, so streaming downloads and ZIP responses can run long. Do not add a `WriteTimeout`. It would cut off slow downloads.
+
+Each Garage admin API call has a 30 second timeout. Mutating calls use a 3 minute timeout, so a slow key change does not fail while Garage still applies it.
+
 ### Authentication
 
 Authentication is required. Set the `AUTH_USER_PASS` environment variable in the format `username:password_hash`, where `password_hash` is a bcrypt hash of the password.

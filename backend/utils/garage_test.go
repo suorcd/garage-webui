@@ -1,10 +1,13 @@
 package utils
 
 import (
+	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestGetAdminEndpointTrimsTrailingSlashes(t *testing.T) {
@@ -232,9 +235,9 @@ func TestFetchSurfacesJSONErrorMessage(t *testing.T) {
 }
 
 func TestFetchTimesOutOnHungServer(t *testing.T) {
-	oldTimeout := fetchTimeout
-	fetchTimeout = 50 * time.Millisecond
-	t.Cleanup(func() { fetchTimeout = oldTimeout })
+	oldTimeout := FetchTimeout
+	FetchTimeout = 50 * time.Millisecond
+	t.Cleanup(func() { FetchTimeout = oldTimeout })
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		time.Sleep(500 * time.Millisecond)
@@ -285,3 +288,43 @@ func TestFetchContextCancelsOnDisconnect(t *testing.T) {
 	}
 }
 
+func TestFetchHonorsPerRequestTimeout(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		time.Sleep(500 * time.Millisecond)
+		w.Write([]byte(`{}`))
+	}))
+	t.Cleanup(server.Close)
+
+	t.Setenv("API_BASE_URL", server.URL)
+	t.Setenv("API_ADMIN_KEY", "test-admin-key")
+
+	g := &garage{}
+	_, err := g.Fetch("/v2/ListBuckets", &FetchOptions{Timeout: 50 * time.Millisecond})
+	if err == nil {
+		t.Fatal("expected a timeout error, got none")
+	}
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Errorf("expected a context.DeadlineExceeded error, got %v", err)
+	}
+}
+
+func TestFetchPerRequestTimeoutExceedsDefault(t *testing.T) {
+	oldTimeout := FetchTimeout
+	FetchTimeout = 50 * time.Millisecond
+	t.Cleanup(func() { FetchTimeout = oldTimeout })
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		time.Sleep(200 * time.Millisecond)
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`{}`))
+	}))
+	t.Cleanup(server.Close)
+
+	t.Setenv("API_BASE_URL", server.URL)
+	t.Setenv("API_ADMIN_KEY", "test-admin-key")
+
+	g := &garage{}
+	if _, err := g.Fetch("/v2/ListBuckets", &FetchOptions{Timeout: 500 * time.Millisecond}); err != nil {
+		t.Fatalf("expected a successful request, got %v", err)
+	}
+}

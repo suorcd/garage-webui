@@ -103,15 +103,23 @@ type FetchOptions struct {
 	Params  map[string]string
 	Body    interface{}
 	Headers map[string]string
+	// Timeout bounds this call. Zero uses FetchTimeout.
+	Timeout time.Duration
 }
 
 // maxErrorBodyBytes caps the error body read in Fetch. Error pages can be
 // large, and only a snippet belongs in the returned error.
 const maxErrorBodyBytes = 4096
 
-// fetchTimeout bounds a Garage admin API call. Tests set it short to prove
-// a hung server fails fast. Production keeps the 30 second default.
-var fetchTimeout = 30 * time.Second
+// FetchTimeout bounds a Garage admin API call. Tests set it short to prove
+// a hung server fails fast. Production keeps the 30 second default. Router
+// tests set it short too, so the variable is exported.
+var FetchTimeout = 30 * time.Second
+
+// MutationTimeout bounds a mutating Garage admin API call. Mutating calls
+// get a larger budget than reads: Garage applies them synchronously, so a
+// slow call is work in progress, not a failure.
+var MutationTimeout = 3 * time.Minute
 
 func (g *garage) Fetch(url string, options *FetchOptions) ([]byte, error) {
 	return g.FetchContext(context.Background(), url, options)
@@ -119,8 +127,15 @@ func (g *garage) Fetch(url string, options *FetchOptions) ([]byte, error) {
 
 // FetchContext is Fetch with a request context. A cancelled context aborts
 // the request, so a disconnect cancels the call instead of waiting out the
-// client timeout.
+// client timeout. options.Timeout bounds this call; zero uses FetchTimeout.
 func (g *garage) FetchContext(ctx context.Context, url string, options *FetchOptions) ([]byte, error) {
+	timeout := FetchTimeout
+	if options.Timeout > 0 {
+		timeout = options.Timeout
+	}
+	ctx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+
 	var reqBody io.Reader
 	reqUrl := fmt.Sprintf("%s%s", g.GetAdminEndpoint(), url)
 	method := http.MethodGet
@@ -166,7 +181,7 @@ func (g *garage) FetchContext(ctx context.Context, url string, options *FetchOpt
 		req.Header.Set("Content-Type", "application/json")
 	}
 
-	client := &http.Client{Timeout: fetchTimeout}
+	client := &http.Client{Timeout: timeout}
 	res, err := client.Do(req)
 	if err != nil {
 		return nil, err

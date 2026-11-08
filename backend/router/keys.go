@@ -26,8 +26,9 @@ func (k *Keys) Delete(w http.ResponseWriter, r *http.Request) {
 	}
 
 	body, err := utils.Garage.Fetch("/v2/DeleteKey", &utils.FetchOptions{
-		Method: http.MethodPost,
-		Params: map[string]string{"id": id},
+		Method:  http.MethodPost,
+		Params:  map[string]string{"id": id},
+		Timeout: utils.MutationTimeout,
 	})
 	if err != nil {
 		utils.ResponseError(w, err)
@@ -52,9 +53,10 @@ func (k *Keys) Update(w http.ResponseWriter, r *http.Request) {
 	}
 
 	body, err := utils.Garage.Fetch("/v2/UpdateKey", &utils.FetchOptions{
-		Method: http.MethodPost,
-		Params: map[string]string{"id": id},
-		Body:   request,
+		Method:  http.MethodPost,
+		Params:  map[string]string{"id": id},
+		Body:    request,
+		Timeout: utils.MutationTimeout,
 	})
 	if err != nil {
 		utils.ResponseError(w, err)

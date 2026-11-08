@@ -622,7 +622,13 @@ func (b *Browse) DeleteObject(w http.ResponseWriter, r *http.Request) {
 
 	// Delete directory and its content
 	if isDirectory && recursive {
-		result, err := deleteDirectoryObjects(r.Context(), client, s3Bucket, key)
+		// The delete runs on a background context with its own timeout:
+		// a tab close must not half-delete a prefix. The credential
+		// lookup above still uses the request context.
+		deleteCtx, cancel := context.WithTimeout(context.Background(), deleteDirectoryTimeout)
+		defer cancel()
+
+		result, err := deleteDirectoryObjects(deleteCtx, client, s3Bucket, key)
 		if err != nil {
 			utils.ResponseError(w, err)
 			return
@@ -652,6 +658,11 @@ const deleteObjectsBatchSize = 1000
 // removes. The result reports Truncated when objects remain, so the caller
 // can repeat the request to delete the rest.
 const deleteObjectsMaxPerRequest = 10000
+
+// deleteDirectoryTimeout bounds a recursive delete. The delete runs on a
+// background context, so it needs its own budget instead of the request
+// timeout. Tests set it short to prove a hung S3 call fails fast.
+var deleteDirectoryTimeout = 5 * time.Minute
 
 func deleteDirectoryObjects(ctx context.Context, client *s3.Client, bucket, prefix string) (schema.DeleteObjectsResult, error) {
 	result := schema.DeleteObjectsResult{}
@@ -744,6 +755,12 @@ type bucketAccess struct {
 }
 
 func getBucketAccess(ctx context.Context, identifier string, needWrite bool) (*bucketAccess, error) {
+	// One budget for the whole credential path: fetchBucketInfo tries
+	// several identifiers in sequence, and each attempt must not burn
+	// a full timeout on its own.
+	ctx, cancel := context.WithTimeout(ctx, utils.FetchTimeout)
+	defer cancel()
+
 	mode := "read"
 	if needWrite {
 		mode = "write"
@@ -801,12 +818,20 @@ func fetchBucketInfo(ctx context.Context, identifier string) (*schema.Bucket, er
 	if err == nil {
 		return decodeBucket(body)
 	}
+	// A transport failure is not a missed lookup: the next identifier
+	// would fail the same way, so stop instead of burning another timeout.
+	if isTransportFailure(err) {
+		return nil, err
+	}
 
 	body, err = utils.Garage.FetchContext(ctx, "/v2/GetBucketInfo", &utils.FetchOptions{
 		Params: map[string]string{"id": identifier},
 	})
 	if err == nil {
 		return decodeBucket(body)
+	}
+	if isTransportFailure(err) {
+		return nil, err
 	}
 
 	bucketID, listErr := findBucketIDByLocalAlias(ctx, identifier)
@@ -822,6 +847,12 @@ func fetchBucketInfo(ctx context.Context, identifier string) (*schema.Bucket, er
 	}
 
 	return decodeBucket(body)
+}
+
+// isTransportFailure reports a failure of the transport, not of the
+// lookup: a timeout or a cancelled context.
+func isTransportFailure(err error) bool {
+	return errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled)
 }
 
 func findBucketIDByLocalAlias(ctx context.Context, alias string) (string, error) {
