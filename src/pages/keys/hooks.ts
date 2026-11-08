@@ -4,7 +4,7 @@ import {
   UseMutationOptions,
   useQuery,
 } from "@tanstack/react-query";
-import { Key } from "./types";
+import { CreateKeyResponse, Key } from "./types";
 import { CreateKeySchema } from "./schema";
 
 export const useKeys = () => {
@@ -15,7 +15,7 @@ export const useKeys = () => {
 };
 
 export const useCreateKey = (
-  options?: UseMutationOptions<unknown, Error, CreateKeySchema>
+  options?: UseMutationOptions<CreateKeyResponse, Error, CreateKeySchema>
 ) => {
   return useMutation({
     mutationFn: async (body) => {

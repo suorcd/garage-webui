@@ -24,8 +24,20 @@ const CreateBucketDialog = () => {
     if (isOpen) form.setFocus("globalAlias");
   }, [isOpen]);
 
+  // Reset the form when the dialog closes. The effect also covers a close
+  // that bypasses React, such as the backdrop form closing the dialog.
+  useEffect(() => {
+    if (!isOpen) form.reset();
+  }, [isOpen, form]);
+
+  const handleClose = () => {
+    form.reset();
+    onClose();
+  };
+
   const createBucket = useCreateBucket({
     onSuccess: () => {
+      form.reset();
       onClose();
       queryClient.invalidateQueries({ queryKey: ["buckets"] });
       toast.success("Bucket created!");
@@ -54,7 +66,7 @@ const CreateBucketDialog = () => {
         </Modal.Body>
 
         <Modal.Actions>
-          <Button onClick={onClose}>Cancel</Button>
+          <Button onClick={handleClose}>Cancel</Button>
           <Button
             color="primary"
             disabled={createBucket.isPending}
