@@ -2,7 +2,7 @@ import { Alert, Loading, Table } from "react-daisyui";
 import { useBrowseObjectsInfinite } from "./hooks";
 import { dayjs, readableBytes } from "@/lib/utils";
 import mime from "mime/lite";
-import { Object } from "./types";
+import { BrowseObject } from "./types";
 import { API_URL } from "@/lib/api";
 import {
   CircleXIcon,
@@ -83,7 +83,7 @@ const ObjectList = ({ prefix, onPrefixChange }: Props) => {
     );
   }, [hasData, lastPageParam, setSearchParams]);
 
-  const onObjectClick = (object: Object) => {
+  const onObjectClick = (object: BrowseObject) => {
     window.open(API_URL + object.url + "?view=1", "_blank", "noopener,noreferrer");
   };
 
@@ -217,7 +217,7 @@ const ObjectList = ({ prefix, onPrefixChange }: Props) => {
 
 type FilePreviewProps = {
   ext?: string | null;
-  object: Object;
+  object: BrowseObject;
 };
 
 const FilePreview = ({ ext, object }: FilePreviewProps) => {

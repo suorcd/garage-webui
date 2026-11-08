@@ -2,7 +2,7 @@ import { Dropdown } from "react-daisyui";
 import {
   DeleteObjectsError,
   DeleteObjectsResult,
-  Object,
+  BrowseObject,
 } from "./types";
 import Button from "@/components/ui/button";
 import { DownloadIcon, EllipsisVertical, Share2, Trash } from "lucide-react";
@@ -17,7 +17,7 @@ import { useRef } from "react";
 
 type Props = {
   prefix?: string;
-  object: Pick<Object, "objectKey" | "url">;
+  object: Pick<BrowseObject, "objectKey" | "url">;
   end?: boolean;
 };
 

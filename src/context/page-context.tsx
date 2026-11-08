@@ -35,25 +35,41 @@ export const PageContextProvider = ({ children }: PropsWithChildren) => {
   }, []);
 
   return (
-    <PageContext.Provider children={children} value={{ ...values, setValue }} />
+    <PageContext.Provider value={{ ...values, setValue }}>
+      {children}
+    </PageContext.Provider>
   );
 };
 
 type PageProps = Partial<PageContextValues>;
 
-const Page = memo((props: PageProps) => {
+const Page = memo(({ title, prev, actions }: PageProps) => {
   const context = useContext(PageContext);
   if (!context) {
     throw new Error("Page component must be used within a PageContextProvider");
   }
+  const { setValue } = context;
+
+  // The values this instance replaces, for the fields it sets. The
+  // cleanup restores them, so unmounting one Page never wipes the
+  // values of another.
+  const [previous] = useState<Partial<PageContextValues>>(() => ({
+    ...(title !== undefined ? { title: context.title } : {}),
+    ...(prev !== undefined ? { prev: context.prev } : {}),
+    ...(actions !== undefined ? { actions: context.actions } : {}),
+  }));
 
   useEffect(() => {
-    context.setValue(props);
+    const values: Partial<PageContextValues> = {};
+    if (title !== undefined) values.title = title;
+    if (prev !== undefined) values.prev = prev;
+    if (actions !== undefined) values.actions = actions;
+    setValue(values);
 
     return () => {
-      context.setValue(initialValues);
+      setValue(previous);
     };
-  }, [props, context.setValue]);
+  }, [title, prev, actions, setValue, previous]);
 
   return null;
 });

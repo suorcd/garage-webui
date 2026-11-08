@@ -6,7 +6,12 @@ import { PageContextProvider } from "@/context/page-context";
 const { nodeInfoState, clusterStatusState } = vi.hoisted(() => ({
   nodeInfoState: {
     node: undefined as
-      | { garageVersion: string; dbEngine: string }
+      | {
+          nodeId: string;
+          garageVersion: string;
+          rustVersion: string;
+          dbEngine: string;
+        }
       | undefined,
     error: undefined as string | undefined,
     isError: false,
@@ -92,11 +97,18 @@ describe("ClusterPage", () => {
   });
 
   it("shows the node details when node info loads", () => {
-    nodeInfoState.node = { garageVersion: "2.5.0", dbEngine: "sqlite" };
+    nodeInfoState.node = {
+      nodeId: "abc123",
+      garageVersion: "2.5.0",
+      rustVersion: "1.85.0",
+      dbEngine: "sqlite",
+    };
 
     renderPage();
 
+    expect(screen.getByText("abc123")).toBeTruthy();
     expect(screen.getByText("2.5.0")).toBeTruthy();
+    expect(screen.getByText("1.85.0")).toBeTruthy();
     expect(screen.getByText("sqlite")).toBeTruthy();
     expect(screen.queryByText(/connection refused/)).toBeNull();
   });

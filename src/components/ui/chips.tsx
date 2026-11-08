@@ -9,45 +9,45 @@ type Props = React.ComponentPropsWithoutRef<"div"> & {
 };
 
 const Chips = forwardRef<HTMLDivElement, Props>(
-  ({ className, children, onRemove, ...props }, ref) => {
-    const { onClick, ...rest } = props;
+  ({ className, children, onClick, onRemove, ...props }, ref) => {
     const classes = cn(
       "inline-flex flex-row items-center h-8 px-4 rounded-full text-sm border border-primary/80 text-base-content cursor-default",
       className
     );
-    const content = (
-      <>
+
+    const onKeyDown = (e: React.KeyboardEvent) => {
+      if (!onClick) return;
+      if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        onClick();
+      }
+    };
+
+    return (
+      <div
+        ref={ref}
+        className={classes}
+        {...props}
+        {...(onClick
+          ? { role: "button", tabIndex: 0, onClick, onKeyDown }
+          : {})}
+      >
         {children}
         {onRemove ? (
           <Button
+            type="button"
             color="ghost"
             shape="circle"
             size="sm"
             className="-mr-3"
-            onClick={onRemove}
+            onClick={(e) => {
+              e.stopPropagation();
+              onRemove();
+            }}
           >
             <X size={16} />
           </Button>
         ) : null}
-      </>
-    );
-
-    if (onClick) {
-      return (
-        <button
-          ref={ref as never}
-          className={classes}
-          onClick={onClick}
-          {...(rest as React.ButtonHTMLAttributes<HTMLButtonElement>)}
-        >
-          {content}
-        </button>
-      );
-    }
-
-    return (
-      <div ref={ref} className={classes} {...rest}>
-        {content}
       </div>
     );
   }

@@ -2,11 +2,11 @@ import Button from "@/components/ui/button";
 import { useKeys } from "@/pages/keys/hooks";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Plus } from "lucide-react";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { Checkbox, Modal, Table } from "react-daisyui";
 import { useFieldArray, useForm, useWatch } from "react-hook-form";
 import { AllowKeysSchema, allowKeysSchema } from "../schema";
-import { useDisclosure } from "@/hooks/useDisclosure";
+import { createDisclosure } from "@/lib/disclosure";
 import { CheckboxField } from "@/components/ui/checkbox";
 import { useAllowKey } from "../hooks";
 import { toast } from "sonner";
@@ -20,7 +20,8 @@ type Props = {
 
 const AllowKeyDialog = ({ currentKeys }: Props) => {
   const { bucket } = useBucketContext();
-  const { dialogRef, isOpen, onOpen, onClose } = useDisclosure();
+  const [dialog] = useState(() => createDisclosure());
+  const { dialogRef, isOpen } = dialog.use();
   const { data: keys } = useKeys();
   const form = useForm<AllowKeysSchema>({
     resolver: zodResolver(allowKeysSchema),
@@ -35,7 +36,7 @@ const AllowKeyDialog = ({ currentKeys }: Props) => {
   const allowKey = useAllowKey(bucket.id, {
     onSuccess: () => {
       form.reset();
-      onClose();
+      dialog.close();
       toast.success("Key allowed!");
       queryClient.invalidateQueries({ queryKey: ["bucket", bucket.id] });
     },
@@ -108,7 +109,7 @@ const AllowKeyDialog = ({ currentKeys }: Props) => {
 
   return (
     <>
-      <Button icon={Plus} color="primary" onClick={onOpen}>
+      <Button icon={Plus} color="primary" onClick={() => dialog.open()}>
         Allow Key
       </Button>
 
@@ -214,7 +215,7 @@ const AllowKeyDialog = ({ currentKeys }: Props) => {
         </Modal.Body>
 
         <Modal.Actions>
-          <Button onClick={onClose}>Cancel</Button>
+          <Button onClick={dialog.close}>Cancel</Button>
           <Button
             color="primary"
             disabled={allowKey.isPending}

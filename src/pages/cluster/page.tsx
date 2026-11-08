@@ -56,12 +56,12 @@ const ClusterPage = () => {
                 </Alert>
               )}
 
-              {/* <DetailItem title="Node ID" value={node?.nodeId} /> */}
+              <DetailItem title="Node ID" value={node?.nodeId} />
               <DetailItem
                 title="Garage Version"
                 value={node?.garageVersion}
               />
-              {/* <DetailItem title="Rust version" value={data?.rustVersion} /> */}
+              <DetailItem title="Rust version" value={node?.rustVersion} />
               <DetailItem title="DB engine" value={node?.dbEngine} />
               <DetailItem
                 title="Layout version"

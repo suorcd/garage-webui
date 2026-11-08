@@ -3,17 +3,18 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { Plus } from "lucide-react";
 import { Modal } from "react-daisyui";
 import { useForm } from "react-hook-form";
-import { useDisclosure } from "@/hooks/useDisclosure";
+import { createDisclosure } from "@/lib/disclosure";
 import { createBucketSchema, CreateBucketSchema } from "../schema";
 import { InputField } from "@/components/ui/input";
 import { useCreateBucket } from "../hooks";
 import { useQueryClient } from "@tanstack/react-query";
 import { handleError } from "@/lib/utils";
 import { toast } from "sonner";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 
 const CreateBucketDialog = () => {
-  const { dialogRef, isOpen, onOpen, onClose } = useDisclosure();
+  const [dialog] = useState(() => createDisclosure());
+  const { dialogRef, isOpen } = dialog.use();
   const form = useForm<CreateBucketSchema>({
     resolver: zodResolver(createBucketSchema),
     defaultValues: { globalAlias: "" },
@@ -32,13 +33,13 @@ const CreateBucketDialog = () => {
 
   const handleClose = () => {
     form.reset();
-    onClose();
+    dialog.close();
   };
 
   const createBucket = useCreateBucket({
     onSuccess: () => {
       form.reset();
-      onClose();
+      dialog.close();
       queryClient.invalidateQueries({ queryKey: ["buckets"] });
       toast.success("Bucket created!");
     },
@@ -51,7 +52,7 @@ const CreateBucketDialog = () => {
 
   return (
     <>
-      <Button icon={Plus} color="primary" onClick={onOpen}>
+      <Button icon={Plus} color="primary" onClick={() => dialog.open()}>
         Create Bucket
       </Button>
 
