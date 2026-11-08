@@ -61,7 +61,7 @@ services:
     environment:
       API_BASE_URL: "http://garage:3903"
       S3_ENDPOINT_URL: "http://garage:3900"
-      AUTH_USER_PASS: "username:$2y$10$DSTi9o..."
+      AUTH_USER_PASS: "username:CHANGE_ME"
 ```
 
 ### Without Docker
@@ -213,7 +213,7 @@ Then update your `docker-compose.yml`:
 webui:
   ....
   environment:
-    AUTH_USER_PASS: "username:$2y$10$DSTi9o..."
+    AUTH_USER_PASS: "username:CHANGE_ME"
 ```
 
 The server refuses to start when `AUTH_USER_PASS` is empty. For local development only, set `AUTH_DISABLED=true` to disable authentication. The server logs a warning in this mode.
