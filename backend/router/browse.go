@@ -648,9 +648,15 @@ func (b *Browse) DeleteObject(w http.ResponseWriter, r *http.Request) {
 
 const deleteObjectsBatchSize = 1000
 
+// deleteObjectsMaxPerRequest caps the objects one recursive delete request
+// removes. The result reports Truncated when objects remain, so the caller
+// can repeat the request to delete the rest.
+const deleteObjectsMaxPerRequest = 10000
+
 func deleteDirectoryObjects(ctx context.Context, client *s3.Client, bucket, prefix string) (schema.DeleteObjectsResult, error) {
 	result := schema.DeleteObjectsResult{}
 	var continuationToken *string
+	attempted := 0
 
 	for {
 		objects, err := client.ListObjectsV2(ctx, &s3.ListObjectsV2Input{
@@ -672,6 +678,22 @@ func deleteDirectoryObjects(ctx context.Context, client *s3.Client, bucket, pref
 		}
 
 		if len(keys) > 0 {
+			// Trim the page to the remaining budget before deleting, so
+			// 10000 is a hard ceiling: a short page must not push the
+			// attempted count past it.
+			remaining := deleteObjectsMaxPerRequest - attempted
+			if remaining <= 0 {
+				result.Truncated = true
+				return result, nil
+			}
+			trimmed := false
+			if len(keys) > remaining {
+				keys = keys[:remaining]
+				trimmed = true
+			}
+			// Count attempted objects, not successful deletes: a prefix
+			// whose deletes all fail must still trip the cap.
+			attempted += len(keys)
 			res, err := client.DeleteObjects(ctx, &s3.DeleteObjectsInput{
 				Bucket: aws.String(bucket),
 				Delete: &types.Delete{Objects: keys},
@@ -688,6 +710,18 @@ func deleteDirectoryObjects(ctx context.Context, client *s3.Client, bucket, pref
 					Message: aws.ToString(deleteErr.Message),
 				})
 			}
+
+			// A trimmed page leaves objects behind even when this was
+			// the last page the listing returns.
+			if trimmed {
+				result.Truncated = true
+				return result, nil
+			}
+		}
+
+		if attempted >= deleteObjectsMaxPerRequest && objects.IsTruncated != nil && *objects.IsTruncated {
+			result.Truncated = true
+			return result, nil
 		}
 
 		if objects.IsTruncated == nil || !*objects.IsTruncated {

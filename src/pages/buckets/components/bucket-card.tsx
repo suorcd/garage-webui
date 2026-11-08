@@ -1,5 +1,6 @@
+import { Alert } from "react-daisyui";
 import { Bucket } from "../types";
-import { ArchiveIcon, ChartPie, ChartScatter } from "lucide-react";
+import { ArchiveIcon, ChartPie, ChartScatter, CircleXIcon } from "lucide-react";
 import { readableBytes } from "@/lib/utils";
 import Button from "@/components/ui/button";
 
@@ -18,6 +19,14 @@ const BucketCard = ({ data }: Props) => {
             {data.aliases?.join(", ")}
           </p>
         </div>
+
+        {data.error && (
+          <div className="col-span-2">
+            <Alert status="error" icon={<CircleXIcon />}>
+              <span className="text-sm">{data.error}</span>
+            </Alert>
+          </div>
+        )}
 
         <div>
           <p className="text-sm flex items-center gap-1">

@@ -20,6 +20,9 @@ type BrowserObject struct {
 type DeleteObjectsResult struct {
 	Deleted int                  `json:"deleted"`
 	Errors  []DeleteObjectsError `json:"errors,omitempty"`
+	// Truncated reports that objects remain after a capped recursive delete.
+	// The caller repeats the request to delete the rest.
+	Truncated bool `json:"truncated,omitempty"`
 }
 
 type DeleteObjectsError struct {

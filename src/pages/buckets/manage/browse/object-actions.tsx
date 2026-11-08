@@ -1,5 +1,9 @@
 import { Dropdown } from "react-daisyui";
-import { DeleteObjectsResult, Object } from "./types";
+import {
+  DeleteObjectsError,
+  DeleteObjectsResult,
+  Object,
+} from "./types";
 import Button from "@/components/ui/button";
 import { DownloadIcon, EllipsisVertical, Share2, Trash } from "lucide-react";
 import { useDeleteObject } from "./hooks";
@@ -9,6 +13,7 @@ import { toast } from "sonner";
 import { cn, handleError } from "@/lib/utils";
 import { API_URL } from "@/lib/api";
 import { shareDialog } from "./share-dialog";
+import { useRef } from "react";
 
 type Props = {
   prefix?: string;
@@ -23,12 +28,25 @@ const ObjectActions = ({ prefix = "", object, end }: Props) => {
   const canWrite = bucket.keys.some(
     (key) => key.permissions.write || key.permissions.owner
   );
+  // A truncated delete runs again for the same prefix until no objects
+  // remain. The counts accumulate across the pages.
+  const deletedTotal = useRef(0);
+  const failedDeletes = useRef<DeleteObjectsError[]>([]);
 
   const deleteObject = useDeleteObject(bucket.id, {
     onSuccess: (data) => {
       const result = data as DeleteObjectsResult;
       if (typeof result.deleted === "number") {
-        const failures = result.errors ?? [];
+        deletedTotal.current += result.deleted;
+        failedDeletes.current.push(...(result.errors ?? []));
+        if (result.truncated) {
+          deleteObject.mutate({
+            key: prefix + object.objectKey,
+            recursive: isDirectory,
+          });
+          return;
+        }
+        const failures = failedDeletes.current;
         if (failures.length > 0) {
           const keys = failures
             .map((error) => error.key)
@@ -36,19 +54,26 @@ const ObjectActions = ({ prefix = "", object, end }: Props) => {
             .slice(0, 3)
             .join(", ");
           toast.warning(
-            `Deleted ${result.deleted} objects, but ${failures.length} failed` +
+            `Deleted ${deletedTotal.current} objects, but ${failures.length} failed` +
               (keys ? ` (${keys})` : "") +
               "."
           );
         } else {
-          toast.success(`Deleted ${result.deleted} objects!`);
+          toast.success(`Deleted ${deletedTotal.current} objects!`);
         }
       } else {
         toast.success("Object deleted!");
       }
       queryClient.invalidateQueries({ queryKey: ["browse", bucket.id] });
     },
-    onError: handleError,
+    onError: (error) => {
+      if (deletedTotal.current > 0) {
+        toast.warning(
+          `Deleted ${deletedTotal.current} objects, then the delete failed.`
+        );
+      }
+      handleError(error);
+    },
   });
 
   const onDownload = () => {
@@ -64,6 +89,8 @@ const ObjectActions = ({ prefix = "", object, end }: Props) => {
           : `Are you sure you want to delete "${objectPath}"?`
       )
     ) {
+      deletedTotal.current = 0;
+      failedDeletes.current = [];
       deleteObject.mutate({
         key: prefix + object.objectKey,
         recursive: isDirectory,

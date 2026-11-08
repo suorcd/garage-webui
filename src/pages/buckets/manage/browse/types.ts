@@ -33,6 +33,7 @@ export type DeleteObjectsError = {
 export type DeleteObjectsResult = {
   deleted: number;
   errors?: DeleteObjectsError[];
+  truncated?: boolean;
 };
 
 export type DeleteObjectResult = DeleteObjectsResult | Record<string, unknown>;
