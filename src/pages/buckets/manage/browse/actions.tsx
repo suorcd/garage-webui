@@ -11,31 +11,43 @@ import { createFolderSchema, CreateFolderSchema } from "./schema";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { InputField } from "@/components/ui/input";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 
 type Props = {
   prefix: string;
   canWrite: boolean;
 };
 
+type FailedUpload = {
+  name: string;
+  reason: string;
+};
+
+const MAX_FAILED_NAMES = 5;
+
+const failedSummary = (failed: FailedUpload[]) => {
+  const shown = failed
+    .slice(0, MAX_FAILED_NAMES)
+    .map((f) => `${f.name} (${f.reason})`);
+  const rest = failed.length - shown.length;
+  return rest > 0
+    ? `${shown.join(", ")}, and ${rest} more`
+    : shown.join(", ");
+};
+
 const Actions = ({ prefix, canWrite }: Props) => {
   const { bucket } = useBucketContext();
   const queryClient = useQueryClient();
+  const [uploading, setUploading] = useState(false);
 
-  const putObject = usePutObject(bucket.id, {
-    onSuccess: () => {
-      toast.success("File uploaded!");
-      queryClient.invalidateQueries({ queryKey: ["browse", bucket.id] });
-    },
-    onError: handleError,
-  });
+  const putObject = usePutObject(bucket.id);
 
   const onUploadFile = () => {
     const input = document.createElement("input");
     input.type = "file";
     input.multiple = true;
 
-    input.onchange = (e) => {
+    input.onchange = async (e) => {
       const files = (e.target as HTMLInputElement).files;
       if (!files?.length) {
         return;
@@ -46,9 +58,38 @@ const Actions = ({ prefix, canWrite }: Props) => {
         return;
       }
 
+      setUploading(true);
+      const failed: FailedUpload[] = [];
+      let succeeded = 0;
+
       for (const file of files) {
-        const key = prefix + file.name;
-        putObject.mutate({ key, file });
+        try {
+          await putObject.mutateAsync({ key: prefix + file.name, file });
+          succeeded += 1;
+        } catch (err) {
+          failed.push({
+            name: file.name,
+            reason: (err as Error)?.message || "Unknown error",
+          });
+        }
+      }
+
+      setUploading(false);
+
+      if (failed.length === 0) {
+        toast.success(
+          `Uploaded ${succeeded} file${succeeded === 1 ? "" : "s"}.`
+        );
+      } else if (succeeded > 0) {
+        toast.warning(
+          `Uploaded ${succeeded} of ${files.length} files. Failed: ${failedSummary(failed)}.`
+        );
+      } else {
+        toast.error(`Upload failed: ${failedSummary(failed)}.`);
+      }
+
+      if (succeeded > 0) {
+        queryClient.invalidateQueries({ queryKey: ["browse", bucket.id] });
       }
     };
 
@@ -69,7 +110,8 @@ const Actions = ({ prefix, canWrite }: Props) => {
             : "A key with write access is required to upload objects."
         }
         onClick={onUploadFile}
-        disabled={!canWrite}
+        disabled={!canWrite || uploading}
+        loading={uploading}
       />
       {/* <Button icon={EllipsisVertical} color="ghost" /> */}
     </>

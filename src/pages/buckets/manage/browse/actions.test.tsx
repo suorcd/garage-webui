@@ -1,8 +1,26 @@
-import { cleanup, render, screen } from "@testing-library/react";
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const { mutateMock } = vi.hoisted(() => ({ mutateMock: vi.fn() }));
+const {
+  mutateMock,
+  mutateAsyncMock,
+  toastSuccess,
+  toastError,
+  toastWarning,
+} = vi.hoisted(() => ({
+  mutateMock: vi.fn(),
+  mutateAsyncMock: vi.fn(),
+  toastSuccess: vi.fn(),
+  toastError: vi.fn(),
+  toastWarning: vi.fn(),
+}));
 
 vi.mock("../context", () => ({
   useBucketContext: () => ({
@@ -12,11 +30,15 @@ vi.mock("../context", () => ({
 }));
 
 vi.mock("./hooks", () => ({
-  usePutObject: () => ({ mutate: mutateMock, isPending: false }),
+  usePutObject: () => ({
+    mutate: mutateMock,
+    mutateAsync: mutateAsyncMock,
+    isPending: false,
+  }),
 }));
 
 vi.mock("sonner", () => ({
-  toast: { success: vi.fn(), error: vi.fn(), warning: vi.fn() },
+  toast: { success: toastSuccess, error: toastError, warning: toastWarning },
 }));
 
 import Actions from "./actions";
@@ -25,19 +47,42 @@ const renderActions = (canWrite: boolean) => {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   });
+  const invalidateSpy = vi.spyOn(queryClient, "invalidateQueries");
 
-  return render(
+  const result = render(
     <QueryClientProvider client={queryClient}>
       <Actions prefix="" canWrite={canWrite} />
     </QueryClientProvider>
   );
+
+  return { ...result, queryClient, invalidateSpy };
 };
+
+const pickFiles = (files: File[]) => {
+  return vi
+    .spyOn(HTMLInputElement.prototype, "click")
+    .mockImplementation(function (this: HTMLInputElement) {
+      Object.defineProperty(this, "files", {
+        value: files,
+        configurable: true,
+      });
+      this.dispatchEvent(new Event("change"));
+    });
+};
+
+const testFiles = (names: string[]) =>
+  names.map((name) => new File(["content"], name));
 
 describe("Actions", () => {
   afterEach(cleanup);
 
   beforeEach(() => {
     mutateMock.mockClear();
+    mutateAsyncMock.mockClear();
+    toastSuccess.mockClear();
+    toastError.mockClear();
+    toastWarning.mockClear();
+    mutateAsyncMock.mockResolvedValue(undefined);
   });
 
   it("disables upload and folder buttons without write access", () => {
@@ -62,5 +107,93 @@ describe("Actions", () => {
 
     expect(upload.disabled).toBe(false);
     expect(folder.disabled).toBe(false);
+  });
+
+  it("uploads selected files with one summary toast and one list refresh", async () => {
+    const { invalidateSpy } = renderActions(true);
+    const files = testFiles(["a.txt", "b.txt", "c.txt"]);
+    const clickSpy = pickFiles(files);
+
+    fireEvent.click(screen.getByTitle("Upload File"));
+
+    await waitFor(() => expect(toastSuccess).toHaveBeenCalledTimes(1));
+    expect(toastSuccess).toHaveBeenCalledWith("Uploaded 3 files.");
+    expect(mutateAsyncMock).toHaveBeenCalledTimes(3);
+    expect(mutateAsyncMock).toHaveBeenNthCalledWith(1, {
+      key: "a.txt",
+      file: files[0],
+    });
+    expect(mutateAsyncMock).toHaveBeenNthCalledWith(3, {
+      key: "c.txt",
+      file: files[2],
+    });
+    expect(invalidateSpy).toHaveBeenCalledTimes(1);
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: ["browse", "bucket-1"],
+    });
+    clickSpy.mockRestore();
+  });
+
+  it("names each failed file in one summary toast", async () => {
+    mutateAsyncMock.mockImplementation(({ key }: { key: string }) =>
+      key === "b.txt"
+        ? Promise.reject(new Error("forbidden"))
+        : Promise.resolve(undefined)
+    );
+    const { invalidateSpy } = renderActions(true);
+    const clickSpy = pickFiles(testFiles(["a.txt", "b.txt", "c.txt"]));
+
+    fireEvent.click(screen.getByTitle("Upload File"));
+
+    await waitFor(() => expect(toastWarning).toHaveBeenCalledTimes(1));
+    expect(toastWarning).toHaveBeenCalledWith(
+      "Uploaded 2 of 3 files. Failed: b.txt (forbidden)."
+    );
+    expect(toastSuccess).not.toHaveBeenCalled();
+    expect(toastError).not.toHaveBeenCalled();
+    expect(invalidateSpy).toHaveBeenCalledTimes(1);
+    clickSpy.mockRestore();
+  });
+
+  it("shows one error toast that names the failed files when every upload fails", async () => {
+    mutateAsyncMock.mockRejectedValue(new Error("forbidden"));
+    const { invalidateSpy } = renderActions(true);
+    const clickSpy = pickFiles(testFiles(["a.txt", "b.txt"]));
+
+    fireEvent.click(screen.getByTitle("Upload File"));
+
+    await waitFor(() => expect(toastError).toHaveBeenCalledTimes(1));
+    expect(toastError).toHaveBeenCalledWith(
+      "Upload failed: a.txt (forbidden), b.txt (forbidden)."
+    );
+    expect(toastSuccess).not.toHaveBeenCalled();
+    expect(toastWarning).not.toHaveBeenCalled();
+    expect(invalidateSpy).not.toHaveBeenCalled();
+    clickSpy.mockRestore();
+  });
+
+  it("disables the upload button while uploads run", async () => {
+    let resolveFirst!: (value: unknown) => void;
+    mutateAsyncMock
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            resolveFirst = resolve;
+          })
+      )
+      .mockResolvedValue(undefined);
+    renderActions(true);
+    const clickSpy = pickFiles(testFiles(["a.txt", "b.txt"]));
+
+    fireEvent.click(screen.getByTitle("Upload File"));
+
+    const upload = screen.getByTitle("Upload File") as HTMLButtonElement;
+    await waitFor(() => expect(upload.disabled).toBe(true));
+    expect(mutateAsyncMock).toHaveBeenCalledTimes(1);
+
+    resolveFirst(undefined);
+    await waitFor(() => expect(toastSuccess).toHaveBeenCalledTimes(1));
+    expect(upload.disabled).toBe(false);
+    clickSpy.mockRestore();
   });
 });
