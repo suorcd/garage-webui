@@ -370,7 +370,7 @@ func (c *Auth) Login(w http.ResponseWriter, r *http.Request) {
 
 	loginLimits.Reset(key)
 	if err := utils.Session.RenewToken(r); err != nil {
-		utils.ResponseError(w, err)
+		utils.ResponseErrorStatus(w, errors.New("cannot rotate the session token"), http.StatusInternalServerError)
 		return
 	}
 	utils.Session.Set(r, "authenticated", true)

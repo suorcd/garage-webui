@@ -187,6 +187,7 @@ Configurable envs:
 - `AUTH_USER_PASS`: The login in `username:password_hash` format. The server refuses to start when this value is empty, unless `AUTH_DISABLED=true`.
 - `AUTH_DISABLED`: Set to `true` to disable authentication for local development. The server logs a warning. Do not use this value in production.
 - `TRUSTED_PROXIES`: IPs and CIDRs of trusted proxies, comma separated. Only these proxies may set `X-Forwarded-For` and `X-Real-IP`. Empty means no proxy is trusted.
+- `SESSION_COOKIE_SECURE`: Set to `false` for a plain HTTP install. Defaults to `true`. A browser drops a Secure cookie over plain HTTP, and login never sticks.
 
 ### Authentication
 
@@ -215,7 +216,7 @@ The API requires the `X-Requested-With: XMLHttpRequest` header on every `POST`, 
 
 ### Running
 
-Once your instance of Garage Web UI is started, you can open the web UI at http://your-ip:3909. You can place it behind a reverse proxy to secure it with SSL.
+Once your instance of Garage Web UI is started, you can open the web UI at http://your-ip:3909. You can place it behind a reverse proxy to secure it with SSL. A plain HTTP install must set `SESSION_COOKIE_SECURE=false`, or the browser drops the session cookie and login never sticks.
 
 ## Development
 

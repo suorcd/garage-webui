@@ -40,10 +40,6 @@ func (s *SessionManager) Set(r *http.Request, key string, value interface{}) {
 	s.mgr.Put(r.Context(), key, value)
 }
 
-func (s *SessionManager) Clear(r *http.Request) error {
-	return s.mgr.Clear(r.Context())
-}
-
 // RenewToken rotates the session token and keeps the session data. Login
 // calls it so a token fixed before login cannot become authenticated.
 func (s *SessionManager) RenewToken(r *http.Request) error {

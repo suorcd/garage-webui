@@ -753,3 +753,61 @@ func TestLoginCookieSecureAcceptsCapitalisedFalse(t *testing.T) {
 	}
 }
 
+func newFailingDeleteStore() *failingDeleteStore {
+	return &failingDeleteStore{items: make(map[string][]byte)}
+}
+
+func (s *failingDeleteStore) Find(token string) ([]byte, bool, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	b, ok := s.items[token]
+	return b, ok, nil
+}
+
+func (s *failingDeleteStore) Commit(token string, b []byte, expiry time.Time) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.items[token] = b
+	return nil
+}
+
+func (s *failingDeleteStore) Delete(string) error {
+	return errors.New("session store unavailable")
+}
+
+func TestLoginHidesSessionRotationFailure(t *testing.T) {
+	hash, err := bcrypt.GenerateFromPassword([]byte("correct-password"), bcrypt.MinCost)
+	if err != nil {
+		t.Fatalf("cannot hash test password: %v", err)
+	}
+
+	t.Setenv("AUTH_USER_PASS", "admin:"+string(hash))
+	t.Setenv("AUTH_DISABLED", "")
+
+	sessionMgr := utils.InitSessionManager()
+	sessionMgr.Store = newFailingDeleteStore()
+	handler := sessionMgr.LoadAndSave(HandleApiRouter())
+
+	first := loginAndGetSessionCookie(t, handler, "")
+	if first == "" {
+		t.Fatal("expected a session cookie from the first login")
+	}
+
+	// A second login must rotate the old token, which deletes it from the
+	// store. The failing store makes that delete fail.
+	req := httptest.NewRequest(http.MethodPost, "/auth/login", strings.NewReader(`{"username":"admin","password":"correct-password"}`))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Requested-With", "XMLHttpRequest")
+	req.RemoteAddr = "192.0.2.99:1234"
+	req.AddCookie(&http.Cookie{Name: "session", Value: first})
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("expected login status 500, got %d: %s", rec.Code, rec.Body.String())
+	}
+	if rec.Body.String() != "cannot rotate the session token" {
+		t.Errorf("expected a generic rotation error, got %q", rec.Body.String())
+	}
+}
+
