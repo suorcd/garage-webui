@@ -1,8 +1,19 @@
 import { z } from "zod";
 
-export const connectNodeSchema = z.object({
-  nodeId: z.string().min(1, "Node ID is required"),
-});
+export const connectNodeSchema = z
+  .object({
+    nodeId: z.string().min(1, "Node ID is required"),
+    address: z.string().trim().optional(),
+  })
+  .refine(
+    (values) =>
+      !values.address ||
+      (!/\s/.test(values.address) && !values.address.includes("@")),
+    {
+      message: "Address must be a host or host:port, without spaces or @",
+      path: ["address"],
+    }
+  );
 
 export type ConnectNodeSchema = z.infer<typeof connectNodeSchema>;
 

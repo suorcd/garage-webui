@@ -1,5 +1,6 @@
 import Code from "@/components/ui/code";
-import { Button, Input, Modal } from "react-daisyui";
+import { InputField } from "@/components/ui/input";
+import { Button, Modal } from "react-daisyui";
 import { useConnectNode } from "../hooks";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -15,18 +16,17 @@ const ConnectNodeDialog = () => {
 
   const form = useForm<ConnectNodeSchema>({
     resolver: zodResolver(connectNodeSchema),
-    defaultValues: { nodeId: "" },
+    defaultValues: { nodeId: "", address: "" },
   });
 
   const connectNode = useConnectNode({
     onSuccess() {
-      form.reset({ nodeId: "" });
+      form.reset({ nodeId: "", address: "" });
       handleHide();
       toast.success("Node connected!");
       queryClient.invalidateQueries({ queryKey: ["status"] });
     },
     onError(err) {
-      handleHide();
       toast.error(err?.message || "Unknown error");
     },
   });
@@ -40,7 +40,9 @@ const ConnectNodeDialog = () => {
   }, [dialogRef]);
 
   const onSubmit = form.handleSubmit((values) => {
-    connectNode.mutate(values.nodeId);
+    connectNode.mutate(
+      values.address ? `${values.nodeId}@${values.address}` : values.nodeId
+    );
   });
 
   return (
@@ -63,11 +65,24 @@ const ConnectNodeDialog = () => {
             <Code className="mt-2">docker exec garage /garage node id</Code>
 
             <p className="mt-8">Enter node id:</p>
-            <Input
+            <InputField
+              form={form}
+              name="nodeId"
               placeholder="..."
-              className="w-full"
-              {...form.register("nodeId")}
+              inputClassName="w-full"
             />
+
+            <p className="mt-4">Enter node address (optional):</p>
+            <InputField
+              form={form}
+              name="address"
+              placeholder="127.0.0.1:3901"
+              inputClassName="w-full"
+            />
+            <p className="mt-2 text-base-content/60">
+              Garage uses id@address when the cluster does not know the node
+              address yet.
+            </p>
           </Modal.Body>
           <Modal.Actions>
             <Button type="button" onClick={handleHide}>
