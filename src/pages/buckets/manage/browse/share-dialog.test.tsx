@@ -21,8 +21,8 @@ vi.mock("@/hooks/useConfig", () => ({
 
 import ShareDialog, { shareDialog } from "./share-dialog";
 
-const renderDialog = () => {
-  shareDialog.open({ key: "file.txt", prefix: "" });
+const renderDialog = (key = "file.txt", prefix = "") => {
+  shareDialog.open({ key, prefix });
   return render(<ShareDialog />);
 };
 
@@ -102,5 +102,15 @@ describe("ShareDialog domains", () => {
 
     expect(screen.getAllByRole("checkbox")).toHaveLength(1);
     expect(checkbox("mybucket").checked).toBe(true);
+  });
+
+  it("encodes #, ?, and spaces in the share URL", () => {
+    renderDialog("report #1?.pdf", "photos/2024/");
+
+    expect(
+      screen.getByDisplayValue(
+        "http://mybucket/photos/2024/report%20%231%3F.pdf"
+      )
+    ).toBeTruthy();
   });
 });
