@@ -25,3 +25,7 @@ services:
       API_BASE_URL: "http://garage:3903"
       S3_ENDPOINT_URL: "http://garage:3900"
       AUTH_USER_PASS: "${AUTH_USER_PASS:?set AUTH_USER_PASS}"
+      # The image is FROM scratch and has no .env, so compose must forward
+      # this explicitly. The default keeps the Secure cookie; a plain HTTP
+      # install sets SESSION_COOKIE_SECURE=false in .env.
+      SESSION_COOKIE_SECURE: "${SESSION_COOKIE_SECURE:-true}"

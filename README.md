@@ -24,6 +24,8 @@ The Garage Web UI is available as a single executable binary and docker image. Y
 $ docker run -p 3909:3909 -v ./garage.toml:/etc/garage.toml:ro --restart unless-stopped --name garage-webui khairul169/garage-webui:latest
 ```
 
+A plain HTTP container adds `-e SESSION_COOKIE_SECURE=false` to that command. With Compose, set it in `.env`; `docker-compose.yml` forwards it.
+
 The container does not start without `AUTH_USER_PASS`. See [Authentication](#authentication).
 
 CI publishes the fork image to `ghcr.io/suorcd/garage-webui` only for version tags.
@@ -187,6 +189,7 @@ Configurable envs:
 - `AUTH_USER_PASS`: The login in `username:password_hash` format. The server refuses to start when this value is empty, unless `AUTH_DISABLED=true`.
 - `AUTH_DISABLED`: Set to `true` to disable authentication for local development. The server logs a warning. Do not use this value in production.
 - `TRUSTED_PROXIES`: IPs and CIDRs of trusted proxies, comma separated. Only these proxies may set `X-Forwarded-For` and `X-Real-IP`. Empty means no proxy is trusted.
+- `SESSION_COOKIE_SECURE`: Set to `false` for a plain HTTP install. Defaults to `true`. A browser drops a Secure cookie over plain HTTP, and login never sticks.
 
 The server uses a 10 second `ReadHeaderTimeout` and a 120 second `IdleTimeout`. It sets no `WriteTimeout`, so streaming downloads and ZIP responses can run long. Do not add a `WriteTimeout`. It would cut off slow downloads.
 
@@ -219,7 +222,7 @@ The API requires the `X-Requested-With: XMLHttpRequest` header on every `POST`, 
 
 ### Running
 
-Once your instance of Garage Web UI is started, you can open the web UI at http://your-ip:3909. You can place it behind a reverse proxy to secure it with SSL.
+Once your instance of Garage Web UI is started, you can open the web UI at http://your-ip:3909. You can place it behind a reverse proxy to secure it with SSL. A plain HTTP install must set `SESSION_COOKIE_SECURE=false`, or the browser drops the session cookie and login never sticks. In a container, pass it as an environment variable (`-e` for `docker run`, `.env` for Compose); the image has no `.env` of its own.
 
 ## Development
 

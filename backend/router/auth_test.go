@@ -2,16 +2,16 @@ package router
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
+	"golang.org/x/crypto/bcrypt"
+	"khairul169/garage-webui/utils"
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 	"time"
-
-	"khairul169/garage-webui/utils"
-
-	"golang.org/x/crypto/bcrypt"
 )
 
 func newTestAPIHandler() http.Handler {
@@ -577,5 +577,243 @@ func TestLoginLimiterIgnoresProxySetAfterHandlerBuilt(t *testing.T) {
 	}
 	if code := loginAttempt(t, handler, "192.0.2.1:1234", "203.0.113.6", "", "admin", "correct-password"); code != http.StatusTooManyRequests {
 		t.Errorf("expected the ingress IP to stay locked out, got %d", code)
+	}
+}
+
+func loginAndGetSessionCookie(t *testing.T, handler http.Handler, cookie string) string {
+	t.Helper()
+
+	req := httptest.NewRequest(http.MethodPost, "/auth/login", strings.NewReader(`{"username":"admin","password":"correct-password"}`))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Requested-With", "XMLHttpRequest")
+	req.RemoteAddr = "192.0.2.99:1234"
+	if cookie != "" {
+		req.AddCookie(&http.Cookie{Name: "session", Value: cookie})
+	}
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected login status 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	for _, c := range rec.Result().Cookies() {
+		if c.Name == "session" {
+			return c.Value
+		}
+	}
+	t.Fatal("expected a session cookie from login, got none")
+	return ""
+}
+
+func statusCodeWithSessionCookie(t *testing.T, handler http.Handler, path, cookie string) int {
+	t.Helper()
+
+	req := httptest.NewRequest(http.MethodGet, path, nil)
+	req.RemoteAddr = "192.0.2.99:1234"
+	if cookie != "" {
+		req.AddCookie(&http.Cookie{Name: "session", Value: cookie})
+	}
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	return rec.Code
+}
+
+func TestLoginRotatesSessionToken(t *testing.T) {
+	handler := setupLoginHandler(t)
+
+	first := loginAndGetSessionCookie(t, handler, "")
+	if first == "" {
+		t.Fatal("expected a session cookie from the first login")
+	}
+
+	second := loginAndGetSessionCookie(t, handler, first)
+	if second == "" {
+		t.Fatal("expected a session cookie from the second login")
+	}
+	if second == first {
+		t.Error("expected login to rotate the session token, got the same token")
+	}
+
+	if code := statusCodeWithSessionCookie(t, handler, "/auth/status", first); code != http.StatusUnauthorized {
+		t.Errorf("expected the old token to be rejected with 401, got %d", code)
+	}
+	if code := statusCodeWithSessionCookie(t, handler, "/auth/status", second); code != http.StatusOK {
+		t.Errorf("expected the new token to return 200, got %d", code)
+	}
+}
+
+func TestLogoutDestroysSessionToken(t *testing.T) {
+	handler := setupLoginHandler(t)
+
+	token := loginAndGetSessionCookie(t, handler, "")
+	if token == "" {
+		t.Fatal("expected a session cookie from login")
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/auth/logout", nil)
+	req.Header.Set("X-Requested-With", "XMLHttpRequest")
+	req.RemoteAddr = "192.0.2.99:1234"
+	req.AddCookie(&http.Cookie{Name: "session", Value: token})
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected logout status 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	var logoutCookie *http.Cookie
+	for _, c := range rec.Result().Cookies() {
+		if c.Name == "session" {
+			logoutCookie = c
+		}
+	}
+	if logoutCookie == nil {
+		t.Fatal("expected logout to set a session cookie")
+	}
+	if logoutCookie.Value == token {
+		t.Error("expected logout to destroy the session token, got the same token")
+	}
+	if logoutCookie.Value != "" && logoutCookie.MaxAge >= 0 {
+		t.Errorf("expected logout to delete or rotate the session cookie, got value %q with MaxAge %d", logoutCookie.Value, logoutCookie.MaxAge)
+	}
+
+	if code := statusCodeWithSessionCookie(t, handler, "/auth/status", token); code != http.StatusUnauthorized {
+		t.Errorf("expected the logged-out token to be rejected with 401, got %d", code)
+	}
+}
+
+func TestLoginSetsSecureCookie(t *testing.T) {
+	handler := setupLoginHandler(t)
+
+	req := httptest.NewRequest(http.MethodPost, "/auth/login", strings.NewReader(`{"username":"admin","password":"correct-password"}`))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Requested-With", "XMLHttpRequest")
+	req.RemoteAddr = "192.0.2.99:1234"
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected login status 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	setCookie := rec.Header().Get("Set-Cookie")
+	if !strings.Contains(setCookie, "; Secure") {
+		t.Errorf("expected the session cookie to be Secure, got %q", setCookie)
+	}
+	if !strings.Contains(setCookie, "; HttpOnly") {
+		t.Errorf("expected the session cookie to be HttpOnly, got %q", setCookie)
+	}
+	if !strings.Contains(setCookie, "; SameSite=Lax") {
+		t.Errorf("expected the session cookie to be SameSite=Lax, got %q", setCookie)
+	}
+}
+
+func TestLoginCookieSecureCanBeDisabled(t *testing.T) {
+	t.Setenv("SESSION_COOKIE_SECURE", "false")
+
+	handler := setupLoginHandler(t)
+
+	req := httptest.NewRequest(http.MethodPost, "/auth/login", strings.NewReader(`{"username":"admin","password":"correct-password"}`))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Requested-With", "XMLHttpRequest")
+	req.RemoteAddr = "192.0.2.99:1234"
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected login status 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	setCookie := rec.Header().Get("Set-Cookie")
+	if strings.Contains(setCookie, "; Secure") {
+		t.Errorf("expected the session cookie to skip Secure when disabled, got %q", setCookie)
+	}
+}
+
+func TestLoginCookieSecureAcceptsCapitalisedFalse(t *testing.T) {
+	t.Setenv("SESSION_COOKIE_SECURE", "False")
+
+	handler := setupLoginHandler(t)
+
+	req := httptest.NewRequest(http.MethodPost, "/auth/login", strings.NewReader(`{"username":"admin","password":"correct-password"}`))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Requested-With", "XMLHttpRequest")
+	req.RemoteAddr = "192.0.2.99:1234"
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected login status 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	setCookie := rec.Header().Get("Set-Cookie")
+	if strings.Contains(setCookie, "; Secure") {
+		t.Errorf("expected the session cookie to skip Secure for SESSION_COOKIE_SECURE=False, got %q", setCookie)
+	}
+}
+
+// failingDeleteStore keeps session data in memory but fails every delete,
+// so a test can force RenewToken to fail.
+type failingDeleteStore struct {
+	mu    sync.Mutex
+	items map[string][]byte
+}
+
+func newFailingDeleteStore() *failingDeleteStore {
+	return &failingDeleteStore{items: make(map[string][]byte)}
+}
+
+func (s *failingDeleteStore) Find(token string) ([]byte, bool, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	b, ok := s.items[token]
+	return b, ok, nil
+}
+
+func (s *failingDeleteStore) Commit(token string, b []byte, expiry time.Time) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.items[token] = b
+	return nil
+}
+
+func (s *failingDeleteStore) Delete(string) error {
+	return errors.New("session store unavailable")
+}
+
+func TestLoginHidesSessionRotationFailure(t *testing.T) {
+	hash, err := bcrypt.GenerateFromPassword([]byte("correct-password"), bcrypt.MinCost)
+	if err != nil {
+		t.Fatalf("cannot hash test password: %v", err)
+	}
+
+	t.Setenv("AUTH_USER_PASS", "admin:"+string(hash))
+	t.Setenv("AUTH_DISABLED", "")
+
+	sessionMgr := utils.InitSessionManager()
+	sessionMgr.Store = newFailingDeleteStore()
+	handler := sessionMgr.LoadAndSave(HandleApiRouter())
+
+	first := loginAndGetSessionCookie(t, handler, "")
+	if first == "" {
+		t.Fatal("expected a session cookie from the first login")
+	}
+
+	// A second login must rotate the old token, which deletes it from the
+	// store. The failing store makes that delete fail.
+	req := httptest.NewRequest(http.MethodPost, "/auth/login", strings.NewReader(`{"username":"admin","password":"correct-password"}`))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Requested-With", "XMLHttpRequest")
+	req.RemoteAddr = "192.0.2.99:1234"
+	req.AddCookie(&http.Cookie{Name: "session", Value: first})
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("expected login status 500, got %d: %s", rec.Code, rec.Body.String())
+	}
+	if rec.Body.String() != "cannot rotate the session token" {
+		t.Errorf("expected a generic rotation error, got %q", rec.Body.String())
 	}
 }
