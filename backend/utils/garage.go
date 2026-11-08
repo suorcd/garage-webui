@@ -3,7 +3,6 @@ package utils
 import (
 	"bytes"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"khairul169/garage-webui/schema"
@@ -104,6 +103,10 @@ type FetchOptions struct {
 	Headers map[string]string
 }
 
+// maxErrorBodyBytes caps the error body read in Fetch. Error pages can be
+// large, and only a snippet belongs in the returned error.
+const maxErrorBodyBytes = 4096
+
 func (g *garage) Fetch(url string, options *FetchOptions) ([]byte, error) {
 	var reqBody io.Reader
 	reqUrl := fmt.Sprintf("%s%s", g.GetAdminEndpoint(), url)
@@ -143,6 +146,13 @@ func (g *garage) Fetch(url string, options *FetchOptions) ([]byte, error) {
 		}
 	}
 
+	// The body is always JSON, so the JSON type wins over a caller header.
+	// Set runs after the caller headers so a caller Content-Type cannot
+	// leave the request with two values.
+	if options.Body != nil {
+		req.Header.Set("Content-Type", "application/json")
+	}
+
 	client := &http.Client{}
 	res, err := client.Do(req)
 	if err != nil {
@@ -152,24 +162,22 @@ func (g *garage) Fetch(url string, options *FetchOptions) ([]byte, error) {
 		defer res.Body.Close()
 	}
 
-	if res.StatusCode != 200 {
-		body, err := io.ReadAll(res.Body)
+	if res.StatusCode < http.StatusOK || res.StatusCode >= http.StatusMultipleChoices {
+		body, err := io.ReadAll(io.LimitReader(res.Body, maxErrorBodyBytes))
 		if err != nil {
 			return nil, err
 		}
 
 		var data map[string]interface{}
-
-		if err := json.Unmarshal(body, &data); err != nil {
-			return nil, err
+		if err := json.Unmarshal(body, &data); err == nil && data["message"] != nil {
+			return nil, fmt.Errorf("garage request failed with status %d: %v", res.StatusCode, data["message"])
 		}
 
-		message := fmt.Sprintf("unexpected status code: %d", res.StatusCode)
-		if data["message"] != nil {
-			message = fmt.Sprintf("%v", data["message"])
+		snippet := strings.TrimSpace(string(body))
+		if snippet == "" {
+			return nil, fmt.Errorf("garage request failed with status %d", res.StatusCode)
 		}
-
-		return nil, errors.New(message)
+		return nil, fmt.Errorf("garage request failed with status %d: %s", res.StatusCode, snippet)
 	}
 
 	body, err := io.ReadAll(res.Body)

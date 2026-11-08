@@ -10,6 +10,7 @@ import (
 	"io"
 	"khairul169/garage-webui/schema"
 	"khairul169/garage-webui/utils"
+	"log"
 	"mime"
 	"mime/multipart"
 	"net/http"
@@ -113,6 +114,7 @@ func (b *Browse) GetOneObject(w http.ResponseWriter, r *http.Request) {
 		})
 		if err != nil {
 			utils.ResponseError(w, err)
+			return
 		}
 		utils.ResponseSuccess(w, object)
 		return
@@ -162,7 +164,7 @@ func (b *Browse) GetOneObject(w http.ResponseWriter, r *http.Request) {
 	_, err = io.Copy(w, object.Body)
 
 	if err != nil {
-		utils.ResponseError(w, err)
+		log.Printf("GetOneObject: cannot copy object body: %v", err)
 		return
 	}
 }
