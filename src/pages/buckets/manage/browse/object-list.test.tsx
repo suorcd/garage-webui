@@ -1,5 +1,6 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const { bucketContext, browseResult } = vi.hoisted(() => ({
@@ -40,10 +41,13 @@ vi.mock("../context", () => ({
 }));
 
 vi.mock("./hooks", () => ({
-  useBrowseObjects: () => ({
-    data: browseResult,
+  useBrowseObjectsInfinite: () => ({
+    data: { pages: [browseResult], pageParams: [undefined] },
     error: null,
     isLoading: false,
+    isFetchingNextPage: false,
+    hasNextPage: false,
+    fetchNextPage: vi.fn(),
   }),
   useDeleteObject: () => ({ mutate: vi.fn() }),
 }));
@@ -60,7 +64,9 @@ function renderList() {
   });
   return render(
     <QueryClientProvider client={queryClient}>
-      <ObjectList prefix="" />
+      <MemoryRouter initialEntries={["/browse?prefix="]}>
+        <ObjectList prefix="" />
+      </MemoryRouter>
     </QueryClientProvider>
   );
 }

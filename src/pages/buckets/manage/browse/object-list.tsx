@@ -1,5 +1,5 @@
 import { Alert, Loading, Table } from "react-daisyui";
-import { useBrowseObjects } from "./hooks";
+import { useBrowseObjectsInfinite } from "./hooks";
 import { dayjs, readableBytes } from "@/lib/utils";
 import mime from "mime/lite";
 import { Object } from "./types";
@@ -14,7 +14,9 @@ import {
 import { useBucketContext } from "../context";
 import ObjectActions from "./object-actions";
 import GotoTopButton from "@/components/ui/goto-top-btn";
-import { useState } from "react";
+import Button from "@/components/ui/button";
+import { useEffect, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 
 type Props = {
   prefix?: string;
@@ -23,10 +25,63 @@ type Props = {
 
 const ObjectList = ({ prefix, onPrefixChange }: Props) => {
   const { bucket } = useBucketContext();
-  const { data, error, isLoading } = useBrowseObjects(bucket.id, {
+  const [searchParams, setSearchParams] = useSearchParams();
+  // The token and the prefix it belongs to, captured once on mount.
+  // A prefix change clears the token: the token names a page of the
+  // old prefix, not the new one.
+  const [mountState] = useState(() => ({
+    token: searchParams.get("next") ?? undefined,
     prefix,
-    limit: 1000,
-  });
+  }));
+  const initialToken =
+    prefix === mountState.prefix ? mountState.token : undefined;
+  const {
+    data,
+    error,
+    isLoading,
+    isFetchingNextPage,
+    hasNextPage,
+    fetchNextPage,
+  } = useBrowseObjectsInfinite(
+    bucket.id,
+    {
+      prefix,
+      limit: 1000,
+    },
+    initialToken
+  );
+
+  const pages = data?.pages ?? [];
+  const prefixes = [...new Set(pages.flatMap((page) => page.prefixes))];
+  const objects = pages.flatMap((page) => page.objects);
+  const hasData = !!data;
+  const lastPageParam =
+    data && data.pageParams.length > 0
+      ? data.pageParams[data.pageParams.length - 1]
+      : undefined;
+
+  // Keep the page token in the URL, so a refresh resumes from the
+  // current page. Replace the entry: the token is list state, not a
+  // navigation step. The token clears once the next prefix loads.
+  // The effect depends on the boolean and the token, not the data
+  // object: a new data identity must not re-run it.
+  useEffect(() => {
+    if (!hasData) {
+      return;
+    }
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        if (lastPageParam) {
+          next.set("next", lastPageParam);
+        } else {
+          next.delete("next");
+        }
+        return next;
+      },
+      { replace: true }
+    );
+  }, [hasData, lastPageParam, setSearchParams]);
 
   const onObjectClick = (object: Object) => {
     window.open(API_URL + object.url + "?view=1", "_blank");
@@ -34,9 +89,9 @@ const ObjectList = ({ prefix, onPrefixChange }: Props) => {
 
   return (
     <div className="overflow-x-auto min-h-[400px]">
-      {!bucket.globalAliases.length && data?.s3Bucket ? (
+      {!bucket.globalAliases.length && pages[0]?.s3Bucket ? (
         <p className="px-4 pt-2 text-sm text-base-content/60">
-          {`This bucket has no global alias. S3 requests use the local alias "${data.s3Bucket}".`}
+          {`This bucket has no global alias. S3 requests use the local alias "${pages[0].s3Bucket}".`}
         </p>
       ) : null}
 
@@ -64,7 +119,7 @@ const ObjectList = ({ prefix, onPrefixChange }: Props) => {
                 </Alert>
               </td>
             </tr>
-          ) : !data?.prefixes?.length && !data?.objects?.length ? (
+          ) : !prefixes.length && !objects.length ? (
             <tr>
               <td className="text-center py-16" colSpan={3}>
                 No objects
@@ -72,7 +127,7 @@ const ObjectList = ({ prefix, onPrefixChange }: Props) => {
             </tr>
           ) : null}
 
-          {data?.prefixes.map((prefix) => (
+          {prefixes.map((prefix) => (
             <tr
               key={prefix}
               className="hover:bg-neutral/60 hover:text-neutral-content group"
@@ -95,7 +150,7 @@ const ObjectList = ({ prefix, onPrefixChange }: Props) => {
             </tr>
           ))}
 
-          {data?.objects.map((object, idx) => {
+          {objects.map((object, idx) => {
             const extIdx = object.objectKey.lastIndexOf(".");
             const filename =
               extIdx >= 0
@@ -126,17 +181,28 @@ const ObjectList = ({ prefix, onPrefixChange }: Props) => {
                   {dayjs(object.lastModified).fromNow()}
                 </td>
                 <ObjectActions
-                  prefix={data.prefix}
+                  prefix={prefix}
                   object={object}
-                  end={
-                    idx >= data.objects.length - 2 && data.objects.length > 5
-                  }
+                  end={idx >= objects.length - 2 && objects.length > 5}
                 />
               </tr>
             );
           })}
         </Table.Body>
       </Table>
+
+      {hasNextPage ? (
+        <div className="px-4 py-3 flex flex-col items-start gap-2">
+          <p className="text-sm text-base-content/60">More objects exist.</p>
+          <Button
+            color="primary"
+            loading={isFetchingNextPage}
+            onClick={() => fetchNextPage()}
+          >
+            Load more
+          </Button>
+        </div>
+      ) : null}
 
       <GotoTopButton />
     </div>
