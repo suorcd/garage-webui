@@ -146,7 +146,7 @@ const KeysPage = () => {
                     <PageLoading />
                   </td>
                 </tr>
-              ) : !items?.length ? (
+              ) : !isError && !items?.length ? (
                 <tr>
                   <td colSpan={6} className="text-center py-16">
                     {search ? `No matches for "${search}"` : "No keys yet"}
