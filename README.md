@@ -21,8 +21,14 @@ The Garage Web UI is available as a single executable binary and docker image. Y
 ### Docker CLI
 
 ```sh
-$ docker run -p 3909:3909 -v ./garage.toml:/etc/garage.toml:ro --restart unless-stopped --name garage-webui ghcr.io/suorcd/garage-webui:latest
+$ docker run -p 3909:3909 \
+    -v ./garage.toml:/etc/garage.toml:ro \
+    -e AUTH_USER_PASS='username:YOUR_BCRYPT_HASH' \
+    --restart unless-stopped --name garage-webui \
+    ghcr.io/suorcd/garage-webui:latest
 ```
+
+The container runs as UID 10001. Make `garage.toml` readable by that user, for example `chmod 644 garage.toml`.
 
 A plain HTTP container adds `-e SESSION_COOKIE_SECURE=false` to that command. With Compose, set it in `.env`; `docker-compose.yml` forwards it.
 
@@ -66,9 +72,11 @@ services:
       AUTH_USER_PASS: "username:CHANGE_ME"
 ```
 
+The web UI container runs as UID 10001. Make `garage.toml` readable by that user.
+
 ### Without Docker
 
-Get the latest binary from the [release page](https://github.com/suorcd/garage-webui/releases/latest) according to your OS architecture. No binary release exists yet. Until one exists, build it with `misc/build-binaries.sh` and copy the binary for your architecture to `/usr/local/bin`.
+The [release page](https://github.com/suorcd/garage-webui/releases/latest) has no binary asset yet. Until one exists, build it with `misc/build-binaries.sh` and copy the binary for your architecture to `/usr/local/bin`.
 
 Run the program with specified `garage.toml` config path.
 
