@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"khairul169/garage-webui/schema"
+	"net"
 	"net/http"
 	"os"
 	"strings"
@@ -44,16 +45,26 @@ func trimEndpoint(endpoint string) string {
 	return strings.TrimRight(endpoint, "/")
 }
 
+// configHost returns the host part of a Garage address. A plain split on
+// ":" breaks IPv6 addresses, so SplitHostPort parses the address first.
+// A bare host without a port keeps the old split as the fallback.
+func configHost(addr string) string {
+	if host, _, err := net.SplitHostPort(addr); err == nil {
+		return host
+	}
+	return strings.Split(addr, ":")[0]
+}
+
 func (g *garage) GetAdminEndpoint() string {
 	endpoint := os.Getenv("API_BASE_URL")
 	if len(endpoint) > 0 {
 		return trimEndpoint(endpoint)
 	}
 
-	host := strings.Split(g.Config.RPCPublicAddr, ":")[0]
+	host := configHost(g.Config.RPCPublicAddr)
 	port := LastString(strings.Split(g.Config.Admin.APIBindAddr, ":"))
 
-	endpoint = fmt.Sprintf("%s:%s", host, port)
+	endpoint = net.JoinHostPort(host, port)
 	if !strings.HasPrefix(endpoint, "http") {
 		endpoint = fmt.Sprintf("http://%s", endpoint)
 	}
@@ -67,10 +78,10 @@ func (g *garage) GetS3Endpoint() string {
 		return trimEndpoint(endpoint)
 	}
 
-	host := strings.Split(g.Config.RPCPublicAddr, ":")[0]
+	host := configHost(g.Config.RPCPublicAddr)
 	port := LastString(strings.Split(g.Config.S3API.APIBindAddr, ":"))
 
-	endpoint = fmt.Sprintf("%s:%s", host, port)
+	endpoint = net.JoinHostPort(host, port)
 	if !strings.HasPrefix(endpoint, "http") {
 		endpoint = fmt.Sprintf("http://%s", endpoint)
 	}
