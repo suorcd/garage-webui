@@ -28,6 +28,11 @@ type fakeS3 struct {
 	contents         map[string][]byte
 	contentTypes     map[string]string
 	omitLastModified bool
+	lastMaxKeys      string
+	tokenPresent     bool
+	lastToken        string
+	nilEntries       int
+	nilPrefixes      int
 }
 
 type listBucketResult struct {
@@ -39,14 +44,19 @@ type listBucketResult struct {
 	IsTruncated           bool           `xml:"IsTruncated"`
 	NextContinuationToken string         `xml:"NextContinuationToken,omitempty"`
 	Contents              []listContents `xml:"Contents"`
+	CommonPrefixes        []commonPrefix `xml:"CommonPrefixes"`
+}
+
+type commonPrefix struct {
+	Prefix string `xml:"Prefix,omitempty"`
 }
 
 type listContents struct {
-	Key          string `xml:"Key"`
-	LastModified string `xml:"LastModified"`
-	ETag         string `xml:"ETag"`
+	Key          string `xml:"Key,omitempty"`
+	LastModified string `xml:"LastModified,omitempty"`
+	ETag         string `xml:"ETag,omitempty"`
 	Size         int64  `xml:"Size"`
-	StorageClass string `xml:"StorageClass"`
+	StorageClass string `xml:"StorageClass,omitempty"`
 }
 
 type deleteRequest struct {
@@ -152,6 +162,9 @@ func (f *fakeS3) handleList(w http.ResponseWriter, r *http.Request) {
 	defer f.mu.Unlock()
 
 	f.listCalls++
+	f.lastMaxKeys = r.URL.Query().Get("max-keys")
+	_, f.tokenPresent = r.URL.Query()["continuation-token"]
+	f.lastToken = r.URL.Query().Get("continuation-token")
 
 	const pageSize = 1000
 	start := 0
@@ -191,6 +204,12 @@ func (f *fakeS3) handleList(w http.ResponseWriter, r *http.Request) {
 			Size:         0,
 			StorageClass: "STANDARD",
 		})
+	}
+	for i := 0; i < f.nilEntries; i++ {
+		result.Contents = append(result.Contents, listContents{})
+	}
+	for i := 0; i < f.nilPrefixes; i++ {
+		result.CommonPrefixes = append(result.CommonPrefixes, commonPrefix{})
 	}
 
 	w.Header().Set("Content-Type", "application/xml")
@@ -274,6 +293,7 @@ func seedReadBucketAccess(t *testing.T) {
 func testBrowseMux() *http.ServeMux {
 	mux := http.NewServeMux()
 	browse := &Browse{}
+	mux.HandleFunc("GET /browse/{bucket}", browse.GetObjects)
 	mux.HandleFunc("DELETE /browse/{bucket}/{key...}", browse.DeleteObject)
 	mux.HandleFunc("GET /browse/{bucket}/{key...}", browse.GetOneObject)
 	return mux
@@ -553,5 +573,135 @@ func TestGetOneObjectDownloadWithoutLastModified(t *testing.T) {
 	}
 	if rec.Body.String() != "hello" {
 		t.Errorf("expected the object body, got %q", rec.Body.String())
+	}
+}
+
+func TestGetObjectsClampsLimit(t *testing.T) {
+	fake := &fakeS3{keys: []string{"a.txt"}}
+	newFakeS3Server(t, fake)
+
+	req := httptest.NewRequest(http.MethodGet, "/browse/test-bucket?limit=1000000", nil)
+	rec := httptest.NewRecorder()
+	testBrowseMux().ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	if fake.lastMaxKeys != "1000" {
+		t.Errorf("expected max-keys 1000, got %q", fake.lastMaxKeys)
+	}
+
+	req = httptest.NewRequest(http.MethodGet, "/browse/test-bucket?limit=-1", nil)
+	rec = httptest.NewRecorder()
+	testBrowseMux().ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	if fake.lastMaxKeys != "1" {
+		t.Errorf("expected max-keys 1, got %q", fake.lastMaxKeys)
+	}
+}
+
+func TestGetObjectsRejectsNonNumericLimit(t *testing.T) {
+	fake := &fakeS3{keys: []string{"a.txt"}}
+	newFakeS3Server(t, fake)
+
+	req := httptest.NewRequest(http.MethodGet, "/browse/test-bucket?limit=abc", nil)
+	rec := httptest.NewRecorder()
+	testBrowseMux().ServeHTTP(rec, req)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected status 400, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestGetObjectsDefaultsLimit(t *testing.T) {
+	fake := &fakeS3{keys: []string{"a.txt"}}
+	newFakeS3Server(t, fake)
+
+	req := httptest.NewRequest(http.MethodGet, "/browse/test-bucket", nil)
+	rec := httptest.NewRecorder()
+	testBrowseMux().ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	if fake.lastMaxKeys != "100" {
+		t.Errorf("expected max-keys 100, got %q", fake.lastMaxKeys)
+	}
+}
+
+func TestGetObjectsEscapesObjectURLs(t *testing.T) {
+	fake := &fakeS3{keys: []string{"my file.txt", "a#b.txt", "café.txt"}}
+	newFakeS3Server(t, fake)
+
+	req := httptest.NewRequest(http.MethodGet, "/browse/test-bucket", nil)
+	rec := httptest.NewRecorder()
+	testBrowseMux().ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	var result schema.BrowseObjectResult
+	if err := json.Unmarshal(rec.Body.Bytes(), &result); err != nil {
+		t.Fatalf("cannot decode response: %v", err)
+	}
+	want := map[string]string{
+		"my file.txt": "/browse/test-bucket/my%20file.txt",
+		"a#b.txt":     "/browse/test-bucket/a%23b.txt",
+		"café.txt":    "/browse/test-bucket/caf%C3%A9.txt",
+	}
+	if len(result.Objects) != len(want) {
+		t.Fatalf("expected %d objects, got %d", len(want), len(result.Objects))
+	}
+	for _, object := range result.Objects {
+		if object.Url != want[*object.ObjectKey] {
+			t.Errorf("expected URL %q for %q, got %q", want[*object.ObjectKey], *object.ObjectKey, object.Url)
+		}
+	}
+}
+
+func TestGetObjectsSkipsNilListEntries(t *testing.T) {
+	fake := &fakeS3{keys: []string{"a.txt"}, nilEntries: 1, nilPrefixes: 1}
+	newFakeS3Server(t, fake)
+
+	req := httptest.NewRequest(http.MethodGet, "/browse/test-bucket", nil)
+	rec := httptest.NewRecorder()
+	testBrowseMux().ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	var result schema.BrowseObjectResult
+	if err := json.Unmarshal(rec.Body.Bytes(), &result); err != nil {
+		t.Fatalf("cannot decode response: %v", err)
+	}
+	if len(result.Objects) != 1 {
+		t.Errorf("expected 1 object, got %d", len(result.Objects))
+	}
+	if len(result.Prefixes) != 0 {
+		t.Errorf("expected 0 prefixes, got %v", result.Prefixes)
+	}
+}
+
+func TestGetObjectsSendsContinuationTokenOnlyWhenGiven(t *testing.T) {
+	fake := &fakeS3{keys: []string{"a.txt"}}
+	newFakeS3Server(t, fake)
+
+	req := httptest.NewRequest(http.MethodGet, "/browse/test-bucket", nil)
+	rec := httptest.NewRecorder()
+	testBrowseMux().ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	if fake.tokenPresent {
+		t.Error("expected no continuation token to be sent")
+	}
+
+	req = httptest.NewRequest(http.MethodGet, "/browse/test-bucket?next=2", nil)
+	rec = httptest.NewRecorder()
+	testBrowseMux().ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	if !fake.tokenPresent || fake.lastToken != "2" {
+		t.Errorf("expected continuation token 2, got present=%v value=%q", fake.tokenPresent, fake.lastToken)
 	}
 }
