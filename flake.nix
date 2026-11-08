@@ -96,7 +96,7 @@
           inherit version;
           src = lib.cleanSource ./backend;
 
-          vendorHash = "sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=";
+          vendorHash = "sha256-yYsBrABb0hrAMlwwpEIYDUg/FBRE9ENVDZJUPgVW1VE=";
           subPackages = [ "." ];
           tags = [ "prod" ];
           env = {
