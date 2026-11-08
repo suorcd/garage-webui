@@ -5,6 +5,8 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -285,6 +287,45 @@ func TestFetchContextCancelsOnDisconnect(t *testing.T) {
 	}
 	if elapsed > 400*time.Millisecond {
 		t.Errorf("expected FetchContext to fail fast on a cancelled context, took %v", elapsed)
+	}
+}
+
+func TestLoadConfigReturnsErrorForMissingFile(t *testing.T) {
+	g := &garage{}
+
+	t.Setenv("CONFIG_PATH", filepath.Join(t.TempDir(), "missing.toml"))
+	if err := g.LoadConfig(); err == nil {
+		t.Error("expected an error for a missing config file, got none")
+	}
+}
+
+func TestLoadConfigReturnsParseErrorForMalformedTOML(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "garage.toml")
+	if err := os.WriteFile(path, []byte("rpc_public_addr = = =\n"), 0o600); err != nil {
+		t.Fatalf("cannot write a malformed config: %v", err)
+	}
+
+	g := &garage{}
+	t.Setenv("CONFIG_PATH", path)
+	if err := g.LoadConfig(); err == nil {
+		t.Error("expected a parse error for malformed TOML, got none")
+	}
+}
+
+func TestLoadConfigLoadsValidTOML(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "garage.toml")
+	config := "rpc_public_addr = \"127.0.0.1:3903\"\n\n[admin]\napi_bind_addr = \"127.0.0.1:3903\"\nadmin_token = \"test-token\"\n"
+	if err := os.WriteFile(path, []byte(config), 0o600); err != nil {
+		t.Fatalf("cannot write a valid config: %v", err)
+	}
+
+	g := &garage{}
+	t.Setenv("CONFIG_PATH", path)
+	if err := g.LoadConfig(); err != nil {
+		t.Fatalf("expected no error for valid TOML, got %v", err)
+	}
+	if g.Config.Admin.AdminToken != "test-token" {
+		t.Errorf("expected the admin token from the config, got %q", g.Config.Admin.AdminToken)
 	}
 }
 

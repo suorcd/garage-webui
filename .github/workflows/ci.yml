@@ -70,6 +70,8 @@ jobs:
           docker run -d --name garage-webui-ci -p 3919:3909 \
             -e AUTH_DISABLED=true \
             -e CONFIG_PATH=/nonexistent \
+            -e API_BASE_URL=http://127.0.0.1:3903 \
+            -e API_ADMIN_KEY=ci-placeholder \
             garage-webui:ci
           for _ in $(seq 1 30); do
             if curl -fsS http://127.0.0.1:3919/ >/dev/null; then

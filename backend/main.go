@@ -1,18 +1,41 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"khairul169/garage-webui/router"
 	"khairul169/garage-webui/ui"
 	"khairul169/garage-webui/utils"
 	"log"
 	"net/http"
+	"net/url"
 	"os"
 	"strings"
 	"time"
 
 	"github.com/joho/godotenv"
 )
+
+// validateGarageConfig checks that the Garage admin endpoint and token
+// resolve from the config file or the environment. It returns an error
+// that names the missing value and where it must come from.
+func validateGarageConfig() error {
+	endpoint := utils.Garage.GetAdminEndpoint()
+	if !hasEndpointHost(endpoint) {
+		return errors.New("cannot resolve the Garage admin endpoint: set API_BASE_URL or provide a config file with rpc_public_addr and admin.api_bind_addr")
+	}
+	if utils.Garage.GetAdminKey() == "" {
+		return errors.New("cannot resolve the Garage admin token: set API_ADMIN_KEY or provide a config file with admin.admin_token")
+	}
+	return nil
+}
+
+// hasEndpointHost reports whether the endpoint has a host name. An
+// endpoint built from an empty config is "http://:" and has none.
+func hasEndpointHost(endpoint string) bool {
+	u, err := url.Parse(endpoint)
+	return err == nil && u.Hostname() != ""
+}
 
 func main() {
 	// Initialize app
@@ -35,7 +58,17 @@ func main() {
 	}
 
 	if err := utils.Garage.LoadConfig(); err != nil {
-		log.Println("Cannot load garage config!", err)
+		if os.IsNotExist(err) {
+			// A missing file is not fatal: an env-only deployment has no file.
+			log.Println("No garage config file found; using environment variables.")
+		} else {
+			// A file that exists but does not parse leaves the server with
+			// a partial config, so the server must not start.
+			log.Fatalf("Cannot load garage config: %v", err)
+		}
+	}
+	if err := validateGarageConfig(); err != nil {
+		log.Fatal(err)
 	}
 
 	basePath := os.Getenv("BASE_PATH")
