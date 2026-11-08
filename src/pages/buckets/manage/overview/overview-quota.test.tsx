@@ -123,7 +123,9 @@ describe("QuotaSection", () => {
       await screen.findByText("Max objects must be greater than 0")
     ).toBeTruthy();
 
+    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(true);
     await user.click(screen.getByRole("checkbox", { name: "Enabled" }));
+    confirmSpy.mockRestore();
 
     await waitFor(
       () =>

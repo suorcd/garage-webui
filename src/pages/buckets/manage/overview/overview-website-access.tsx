@@ -1,7 +1,7 @@
 import { DeepPartial, useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { websiteConfigSchema, WebsiteConfigSchema } from "../schema";
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { useDebounce } from "@/hooks/useDebounce";
 import { useUpdateBucket } from "../hooks";
 import { useConfig } from "@/hooks/useConfig";
@@ -26,7 +26,7 @@ const WebsiteAccessSection = () => {
 
   const onChange = useDebounce((values: DeepPartial<WebsiteConfigSchema>) => {
     const data = {
-      enabled: values.websiteAccess,
+      enabled: values.websiteAccess ?? false,
       indexDocument: values.websiteAccess
         ? values.websiteConfig?.indexDocument
         : undefined,
@@ -38,18 +38,71 @@ const WebsiteAccessSection = () => {
     updateMutation.mutate({
       websiteAccess: data,
     });
-  });
+  }, 500, { flushOnUnmount: true });
+
+  const wasEnabledRef = useRef<boolean | undefined>(undefined);
+  const skipSaveRef = useRef(false);
+  // Reading formState.isDirty inside an effect is not reliable under every
+  // validation mode, so track the user's edits directly.
+  const editedRef = useRef(false);
+
+  // A save that landed makes the form equal to the server, so the section may
+  // adopt server state again. Without this it stays pinned to the first load
+  // for the life of the mount.
+  useEffect(() => {
+    if (!updateMutation.isSuccess) return;
+    skipSaveRef.current = true;
+    form.reset(form.getValues());
+    skipSaveRef.current = false;
+    editedRef.current = false;
+  }, [updateMutation.isSuccess, form]);
 
   useEffect(() => {
-    form.reset({
-      websiteAccess: data?.websiteAccess,
-      websiteConfig: {
-        indexDocument: data?.websiteConfig?.indexDocument || "index.html",
-        errorDocument: data?.websiteConfig?.errorDocument || "error/400.html",
-      },
-    });
+    if (!editedRef.current) {
+      form.reset({
+        websiteAccess: data?.websiteAccess,
+        websiteConfig: {
+          indexDocument: data?.websiteConfig?.indexDocument || "index.html",
+          errorDocument: data?.websiteConfig?.errorDocument || "error/400.html",
+        },
+      });
+    }
+    wasEnabledRef.current = form.getValues("websiteAccess");
 
-    const { unsubscribe } = form.watch((values) => onChange(values));
+    const { unsubscribe } = form.watch((values, { name }) => {
+      if (name) {
+        editedRef.current = true;
+      }
+
+      const wasEnabled = wasEnabledRef.current;
+      wasEnabledRef.current = values.websiteAccess;
+
+      if (skipSaveRef.current) {
+        return;
+      }
+
+      if (
+        name === "websiteAccess" &&
+        values.websiteAccess === false &&
+        wasEnabled === true
+      ) {
+        if (
+          !window.confirm(
+            "Turn off website access? This stops the bucket website."
+          )
+        ) {
+          // setValue notifies watch twice, so clear the flag after the
+          // call returns instead of letting the first notification
+          // consume it.
+          skipSaveRef.current = true;
+          form.setValue("websiteAccess", true);
+          skipSaveRef.current = false;
+          return;
+        }
+      }
+
+      onChange(values);
+    });
     return unsubscribe;
   }, [data]);
 
@@ -121,6 +174,13 @@ const WebsiteAccessSection = () => {
             ) : null}
           </div>
         </>
+      )}
+
+      {updateMutation.isPending && (
+        <p className="text-sm opacity-70">Saving</p>
+      )}
+      {!updateMutation.isPending && updateMutation.isSuccess && (
+        <p className="text-sm opacity-70">Saved</p>
       )}
     </div>
   );
