@@ -188,6 +188,10 @@ Configurable envs:
 - `AUTH_DISABLED`: Set to `true` to disable authentication for local development. The server logs a warning. Do not use this value in production.
 - `TRUSTED_PROXIES`: IPs and CIDRs of trusted proxies, comma separated. Only these proxies may set `X-Forwarded-For` and `X-Real-IP`. Empty means no proxy is trusted.
 
+The server uses a 10 second `ReadHeaderTimeout` and a 120 second `IdleTimeout`. It sets no `WriteTimeout`, so streaming downloads and ZIP responses can run long. Do not add a `WriteTimeout`. It would cut off slow downloads.
+
+Each Garage admin API call has a 30 second timeout. Mutating calls use a 3 minute timeout, so a slow key change does not fail while Garage still applies it.
+
 ### Authentication
 
 Authentication is required. Set the `AUTH_USER_PASS` environment variable in the format `username:password_hash`, where `password_hash` is a bcrypt hash of the password.

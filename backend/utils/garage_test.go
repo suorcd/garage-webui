@@ -1,10 +1,13 @@
 package utils
 
 import (
+	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestGetAdminEndpointTrimsTrailingSlashes(t *testing.T) {
@@ -228,5 +231,100 @@ func TestFetchSurfacesJSONErrorMessage(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "500") || !strings.Contains(err.Error(), "boom") {
 		t.Errorf("expected the error to name the status and the message, got %q", err.Error())
+	}
+}
+
+func TestFetchTimesOutOnHungServer(t *testing.T) {
+	oldTimeout := FetchTimeout
+	FetchTimeout = 50 * time.Millisecond
+	t.Cleanup(func() { FetchTimeout = oldTimeout })
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		time.Sleep(500 * time.Millisecond)
+		w.Write([]byte(`{}`))
+	}))
+	t.Cleanup(server.Close)
+
+	t.Setenv("API_BASE_URL", server.URL)
+	t.Setenv("API_ADMIN_KEY", "test-admin-key")
+
+	g := &garage{}
+	start := time.Now()
+	_, err := g.Fetch("/v2/ListBuckets", &FetchOptions{})
+	elapsed := time.Since(start)
+	if err == nil {
+		t.Fatal("expected a timeout error, got none")
+	}
+	if elapsed > 400*time.Millisecond {
+		t.Errorf("expected Fetch to fail fast on a hung server, took %v", elapsed)
+	}
+}
+
+func TestFetchContextCancelsOnDisconnect(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		time.Sleep(500 * time.Millisecond)
+		w.Write([]byte(`{}`))
+	}))
+	t.Cleanup(server.Close)
+
+	t.Setenv("API_BASE_URL", server.URL)
+	t.Setenv("API_ADMIN_KEY", "test-admin-key")
+
+	g := &garage{}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	start := time.Now()
+	_, err := g.FetchContext(ctx, "/v2/ListBuckets", &FetchOptions{})
+	elapsed := time.Since(start)
+	if err == nil {
+		t.Fatal("expected a context error, got none")
+	}
+	if !errors.Is(err, context.Canceled) {
+		t.Errorf("expected a context.Canceled error, got %v", err)
+	}
+	if elapsed > 400*time.Millisecond {
+		t.Errorf("expected FetchContext to fail fast on a cancelled context, took %v", elapsed)
+	}
+}
+
+func TestFetchHonorsPerRequestTimeout(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		time.Sleep(500 * time.Millisecond)
+		w.Write([]byte(`{}`))
+	}))
+	t.Cleanup(server.Close)
+
+	t.Setenv("API_BASE_URL", server.URL)
+	t.Setenv("API_ADMIN_KEY", "test-admin-key")
+
+	g := &garage{}
+	_, err := g.Fetch("/v2/ListBuckets", &FetchOptions{Timeout: 50 * time.Millisecond})
+	if err == nil {
+		t.Fatal("expected a timeout error, got none")
+	}
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Errorf("expected a context.DeadlineExceeded error, got %v", err)
+	}
+}
+
+func TestFetchPerRequestTimeoutExceedsDefault(t *testing.T) {
+	oldTimeout := FetchTimeout
+	FetchTimeout = 50 * time.Millisecond
+	t.Cleanup(func() { FetchTimeout = oldTimeout })
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		time.Sleep(200 * time.Millisecond)
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`{}`))
+	}))
+	t.Cleanup(server.Close)
+
+	t.Setenv("API_BASE_URL", server.URL)
+	t.Setenv("API_ADMIN_KEY", "test-admin-key")
+
+	g := &garage{}
+	if _, err := g.Fetch("/v2/ListBuckets", &FetchOptions{Timeout: 500 * time.Millisecond}); err != nil {
+		t.Fatalf("expected a successful request, got %v", err)
 	}
 }

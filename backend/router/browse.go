@@ -49,7 +49,7 @@ func (b *Browse) GetObjects(w http.ResponseWriter, r *http.Request) {
 		limit = max(1, min(parsed, browseMaxLimit))
 	}
 
-	client, access, err := getS3Client(bucket, false)
+	client, access, err := getS3Client(r.Context(), bucket, false)
 	if err != nil {
 		utils.ResponseError(w, err)
 		return
@@ -66,7 +66,7 @@ func (b *Browse) GetObjects(w http.ResponseWriter, r *http.Request) {
 		input.ContinuationToken = aws.String(continuationToken)
 	}
 
-	objects, err := client.ListObjectsV2(context.Background(), input)
+	objects, err := client.ListObjectsV2(r.Context(), input)
 
 	if err != nil {
 		utils.ResponseError(w, err)
@@ -126,7 +126,7 @@ func (b *Browse) GetOneObject(w http.ResponseWriter, r *http.Request) {
 	thumbnail := queryParams.Get("thumb") == "1"
 	download := queryParams.Get("dl") == "1"
 
-	client, access, err := getS3Client(bucket, false)
+	client, access, err := getS3Client(r.Context(), bucket, false)
 	if err != nil {
 		utils.ResponseError(w, err)
 		return
@@ -139,7 +139,7 @@ func (b *Browse) GetOneObject(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if !view && !download {
-		object, err := client.HeadObject(context.Background(), &s3.HeadObjectInput{
+		object, err := client.HeadObject(r.Context(), &s3.HeadObjectInput{
 			Bucket: aws.String(s3Bucket),
 			Key:    aws.String(key),
 		})
@@ -151,7 +151,7 @@ func (b *Browse) GetOneObject(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	object, err := client.GetObject(context.Background(), &s3.GetObjectInput{
+	object, err := client.GetObject(r.Context(), &s3.GetObjectInput{
 		Bucket: aws.String(s3Bucket),
 		Key:    aws.String(key),
 	})
@@ -358,7 +358,7 @@ func (b *Browse) PutObject(w http.ResponseWriter, r *http.Request) {
 	key := r.PathValue("key")
 	isDirectory := strings.HasSuffix(key, "/")
 
-	client, access, err := getS3Client(bucket, true)
+	client, access, err := getS3Client(r.Context(), bucket, true)
 	if err != nil {
 		utils.ResponseError(w, err)
 		return
@@ -613,7 +613,7 @@ func (b *Browse) DeleteObject(w http.ResponseWriter, r *http.Request) {
 	recursive := r.URL.Query().Get("recursive") == "true"
 	isDirectory := strings.HasSuffix(key, "/")
 
-	client, access, err := getS3Client(bucket, true)
+	client, access, err := getS3Client(r.Context(), bucket, true)
 	if err != nil {
 		utils.ResponseError(w, err)
 		return
@@ -622,7 +622,13 @@ func (b *Browse) DeleteObject(w http.ResponseWriter, r *http.Request) {
 
 	// Delete directory and its content
 	if isDirectory && recursive {
-		result, err := deleteDirectoryObjects(r.Context(), client, s3Bucket, key)
+		// The delete runs on a background context with its own timeout:
+		// a tab close must not half-delete a prefix. The credential
+		// lookup above still uses the request context.
+		deleteCtx, cancel := context.WithTimeout(context.Background(), deleteDirectoryTimeout)
+		defer cancel()
+
+		result, err := deleteDirectoryObjects(deleteCtx, client, s3Bucket, key)
 		if err != nil {
 			utils.ResponseError(w, err)
 			return
@@ -633,7 +639,7 @@ func (b *Browse) DeleteObject(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Delete single object
-	res, err := client.DeleteObject(context.Background(), &s3.DeleteObjectInput{
+	res, err := client.DeleteObject(r.Context(), &s3.DeleteObjectInput{
 		Bucket: aws.String(s3Bucket),
 		Key:    aws.String(key),
 	})
@@ -652,6 +658,11 @@ const deleteObjectsBatchSize = 1000
 // removes. The result reports Truncated when objects remain, so the caller
 // can repeat the request to delete the rest.
 const deleteObjectsMaxPerRequest = 10000
+
+// deleteDirectoryTimeout bounds a recursive delete. The delete runs on a
+// background context, so it needs its own budget instead of the request
+// timeout. Tests set it short to prove a hung S3 call fails fast.
+var deleteDirectoryTimeout = 5 * time.Minute
 
 func deleteDirectoryObjects(ctx context.Context, client *s3.Client, bucket, prefix string) (schema.DeleteObjectsResult, error) {
 	result := schema.DeleteObjectsResult{}
@@ -743,7 +754,13 @@ type bucketAccess struct {
 	Credentials aws.CredentialsProvider
 }
 
-func getBucketAccess(identifier string, needWrite bool) (*bucketAccess, error) {
+func getBucketAccess(ctx context.Context, identifier string, needWrite bool) (*bucketAccess, error) {
+	// One budget for the whole credential path: fetchBucketInfo tries
+	// several identifiers in sequence, and each attempt must not burn
+	// a full timeout on its own.
+	ctx, cancel := context.WithTimeout(ctx, utils.FetchTimeout)
+	defer cancel()
+
 	mode := "read"
 	if needWrite {
 		mode = "write"
@@ -755,7 +772,7 @@ func getBucketAccess(identifier string, needWrite bool) (*bucketAccess, error) {
 		return cacheData.(*bucketAccess), nil
 	}
 
-	bucket, err := fetchBucketInfo(identifier)
+	bucket, err := fetchBucketInfo(ctx, identifier)
 	if err != nil {
 		return nil, err
 	}
@@ -770,7 +787,7 @@ func getBucketAccess(identifier string, needWrite bool) (*bucketAccess, error) {
 		return nil, err
 	}
 
-	keyBody, err := utils.Garage.Fetch("/v2/GetKeyInfo", &utils.FetchOptions{
+	keyBody, err := utils.Garage.FetchContext(ctx, "/v2/GetKeyInfo", &utils.FetchOptions{
 		Params: map[string]string{
 			"id":            key.AccessKeyID,
 			"showSecretKey": "true",
@@ -794,27 +811,35 @@ func getBucketAccess(identifier string, needWrite bool) (*bucketAccess, error) {
 	return access, nil
 }
 
-func fetchBucketInfo(identifier string) (*schema.Bucket, error) {
-	body, err := utils.Garage.Fetch("/v2/GetBucketInfo", &utils.FetchOptions{
+func fetchBucketInfo(ctx context.Context, identifier string) (*schema.Bucket, error) {
+	body, err := utils.Garage.FetchContext(ctx, "/v2/GetBucketInfo", &utils.FetchOptions{
 		Params: map[string]string{"globalAlias": identifier},
 	})
 	if err == nil {
 		return decodeBucket(body)
 	}
+	// A transport failure is not a missed lookup: the next identifier
+	// would fail the same way, so stop instead of burning another timeout.
+	if isTransportFailure(err) {
+		return nil, err
+	}
 
-	body, err = utils.Garage.Fetch("/v2/GetBucketInfo", &utils.FetchOptions{
+	body, err = utils.Garage.FetchContext(ctx, "/v2/GetBucketInfo", &utils.FetchOptions{
 		Params: map[string]string{"id": identifier},
 	})
 	if err == nil {
 		return decodeBucket(body)
 	}
+	if isTransportFailure(err) {
+		return nil, err
+	}
 
-	bucketID, listErr := findBucketIDByLocalAlias(identifier)
+	bucketID, listErr := findBucketIDByLocalAlias(ctx, identifier)
 	if listErr != nil {
 		return nil, fmt.Errorf("cannot find bucket %q: %w", identifier, listErr)
 	}
 
-	body, err = utils.Garage.Fetch("/v2/GetBucketInfo", &utils.FetchOptions{
+	body, err = utils.Garage.FetchContext(ctx, "/v2/GetBucketInfo", &utils.FetchOptions{
 		Params: map[string]string{"id": bucketID},
 	})
 	if err != nil {
@@ -824,8 +849,14 @@ func fetchBucketInfo(identifier string) (*schema.Bucket, error) {
 	return decodeBucket(body)
 }
 
-func findBucketIDByLocalAlias(alias string) (string, error) {
-	body, err := utils.Garage.Fetch("/v2/ListBuckets", &utils.FetchOptions{})
+// isTransportFailure reports a failure of the transport, not of the
+// lookup: a timeout or a cancelled context.
+func isTransportFailure(err error) bool {
+	return errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled)
+}
+
+func findBucketIDByLocalAlias(ctx context.Context, alias string) (string, error) {
+	body, err := utils.Garage.FetchContext(ctx, "/v2/ListBuckets", &utils.FetchOptions{})
 	if err != nil {
 		return "", err
 	}
@@ -889,8 +920,8 @@ func getS3BucketName(bucket *schema.Bucket, key *schema.KeyElement) (string, err
 	return "", fmt.Errorf("bucket %s has no global alias and key %s has no local alias", bucket.ID, key.AccessKeyID)
 }
 
-func getS3Client(identifier string, needWrite bool) (*s3.Client, *bucketAccess, error) {
-	access, err := getBucketAccess(identifier, needWrite)
+func getS3Client(ctx context.Context, identifier string, needWrite bool) (*s3.Client, *bucketAccess, error) {
+	access, err := getBucketAccess(ctx, identifier, needWrite)
 	if err != nil {
 		return nil, nil, fmt.Errorf("cannot use bucket %s: %w", identifier, err)
 	}

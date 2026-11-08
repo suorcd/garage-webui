@@ -1,21 +1,21 @@
 package router
 
 import (
+	"context"
 	"encoding/json"
 	"encoding/xml"
 	"fmt"
+	"github.com/aws/aws-sdk-go-v2/credentials"
+	"khairul169/garage-webui/schema"
+	"khairul169/garage-webui/utils"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
-
-	"khairul169/garage-webui/schema"
-	"khairul169/garage-webui/utils"
-
-	"github.com/aws/aws-sdk-go-v2/credentials"
 )
 
 type fakeS3 struct {
@@ -435,6 +435,94 @@ func assertViewSecurityHeaders(t *testing.T, rec *httptest.ResponseRecorder) {
 	}
 }
 
+func TestGetObjectsCancelsCredentialFetchWhenRequestContextEnds(t *testing.T) {
+	fake := &fakeS3{keys: []string{"a.txt"}}
+	newFakeS3Server(t, fake)
+	// Drop the seeded credential cache so the handler must resolve
+	// credentials through the admin API.
+	utils.Cache.ClearPrefix("key:")
+
+	// The admin API answers slowly: a credential fetch that ignores the
+	// cancelled context would wait out the sleep before the S3 call fails.
+	// The counter shows whether the fetch reached the admin API at all.
+	var served atomic.Int32
+	admin := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		served.Add(1)
+		time.Sleep(500 * time.Millisecond)
+		w.Header().Set("Content-Type", "application/json")
+		switch r.URL.Path {
+		case "/v2/GetBucketInfo":
+			json.NewEncoder(w).Encode(schema.Bucket{
+				ID:            "test-bucket",
+				GlobalAliases: []string{"test-bucket"},
+				Keys: []schema.KeyElement{{
+					AccessKeyID: "test-access-key",
+					Permissions: schema.Permissions{Read: true},
+				}},
+			})
+		case "/v2/GetKeyInfo":
+			json.NewEncoder(w).Encode(schema.KeyElement{
+				AccessKeyID:     "test-access-key",
+				SecretAccessKey: "test-secret-key",
+			})
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	t.Cleanup(admin.Close)
+
+	t.Setenv("API_BASE_URL", admin.URL)
+	t.Setenv("API_ADMIN_KEY", "test-admin-key")
+
+	req := cancelledRequest(t, http.MethodGet, "/browse/test-bucket")
+	rec := httptest.NewRecorder()
+	testBrowseMux().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("expected status 500, got %d: %s", rec.Code, rec.Body.String())
+	}
+	if got := served.Load(); got != 0 {
+		t.Errorf("expected the cancelled credential fetch to serve no admin request, got %d", got)
+	}
+}
+
+func TestGetObjectsCredentialFetchStopsAfterOneHungAttempt(t *testing.T) {
+	fake := &fakeS3{keys: []string{"a.txt"}}
+	newFakeS3Server(t, fake)
+	// Drop the seeded credential cache so the handler must resolve
+	// credentials through the admin API.
+	utils.Cache.ClearPrefix("key:")
+
+	// The admin API hangs: each attempt that reaches it burns a full
+	// timeout, so the count shows how many attempts the handler made.
+	var served atomic.Int32
+	admin := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		served.Add(1)
+		time.Sleep(500 * time.Millisecond)
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`{}`))
+	}))
+	t.Cleanup(admin.Close)
+
+	t.Setenv("API_BASE_URL", admin.URL)
+	t.Setenv("API_ADMIN_KEY", "test-admin-key")
+
+	oldTimeout := utils.FetchTimeout
+	utils.FetchTimeout = 100 * time.Millisecond
+	t.Cleanup(func() { utils.FetchTimeout = oldTimeout })
+
+	req := httptest.NewRequest(http.MethodGet, "/browse/test-bucket", nil)
+	rec := httptest.NewRecorder()
+	testBrowseMux().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("expected status 500, got %d: %s", rec.Code, rec.Body.String())
+	}
+	if got := served.Load(); got != 1 {
+		t.Errorf("expected the credential fetch to stop after one hung attempt, admin served %d requests", got)
+	}
+}
+
 func TestDeleteObjectRecursiveDeletesAllPages(t *testing.T) {
 	keys := make([]string, 1001)
 	for i := range keys {
@@ -471,6 +559,31 @@ func TestDeleteObjectRecursiveDeletesAllPages(t *testing.T) {
 	}
 	if len(fake.deletedKeys) != 1001 {
 		t.Errorf("expected 1001 keys sent to S3 delete, got %d", len(fake.deletedKeys))
+	}
+}
+
+func TestDeleteObjectRecursiveContinuesAfterClientDisconnect(t *testing.T) {
+	fake := &fakeS3{keys: []string{"dir/a.txt", "dir/b.txt"}}
+	newFakeS3Server(t, fake)
+
+	req := cancelledRequest(t, http.MethodDelete, "/browse/test-bucket/dir/?recursive=true")
+	rec := httptest.NewRecorder()
+	testBrowseMux().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	var result schema.DeleteObjectsResult
+	if err := json.Unmarshal(rec.Body.Bytes(), &result); err != nil {
+		t.Fatalf("cannot decode response: %v", err)
+	}
+
+	if result.Deleted != 2 {
+		t.Errorf("expected 2 deleted objects, got %d", result.Deleted)
+	}
+	if len(fake.deletedKeys) != 2 {
+		t.Errorf("expected 2 keys sent to S3 delete, got %d", len(fake.deletedKeys))
 	}
 }
 
@@ -872,5 +985,52 @@ func TestDeleteDirectoryObjectsDeletesNineThousandNineHundredNinetyNine(t *testi
 	}
 	if fake.deleteCalls != 10 {
 		t.Errorf("expected 10 delete calls, got %d", fake.deleteCalls)
+	}
+}
+
+func cancelledRequest(t *testing.T, method, target string) *http.Request {
+	t.Helper()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	return httptest.NewRequest(method, target, nil).WithContext(ctx)
+}
+
+func TestGetObjectsCancelsWhenRequestContextEnds(t *testing.T) {
+	fake := &fakeS3{keys: []string{"a.txt"}}
+	newFakeS3Server(t, fake)
+
+	req := cancelledRequest(t, http.MethodGet, "/browse/test-bucket")
+	rec := httptest.NewRecorder()
+	testBrowseMux().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("expected status 500, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestGetOneObjectCancelsWhenRequestContextEnds(t *testing.T) {
+	fake := &fakeS3{keys: []string{"a.txt"}}
+	newFakeS3Server(t, fake)
+
+	req := cancelledRequest(t, http.MethodGet, "/browse/test-bucket/a.txt")
+	rec := httptest.NewRecorder()
+	testBrowseMux().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("expected status 500, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestDeleteObjectCancelsWhenRequestContextEnds(t *testing.T) {
+	fake := &fakeS3{keys: []string{"a.txt"}}
+	newFakeS3Server(t, fake)
+
+	req := cancelledRequest(t, http.MethodDelete, "/browse/test-bucket/a.txt")
+	rec := httptest.NewRecorder()
+	testBrowseMux().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("expected status 500, got %d: %s", rec.Code, rec.Body.String())
 	}
 }

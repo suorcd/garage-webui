@@ -46,8 +46,9 @@ func (b *Buckets) AllowKey(w http.ResponseWriter, r *http.Request) {
 	}
 
 	body, err := utils.Garage.Fetch("/v2/AllowBucketKey", &utils.FetchOptions{
-		Method: http.MethodPost,
-		Body:   request,
+		Method:  http.MethodPost,
+		Body:    request,
+		Timeout: utils.MutationTimeout,
 	})
 	if err != nil {
 		utils.ResponseError(w, err)
@@ -66,8 +67,9 @@ func (b *Buckets) DenyKey(w http.ResponseWriter, r *http.Request) {
 	}
 
 	body, err := utils.Garage.Fetch("/v2/DenyBucketKey", &utils.FetchOptions{
-		Method: http.MethodPost,
-		Body:   request,
+		Method:  http.MethodPost,
+		Body:    request,
+		Timeout: utils.MutationTimeout,
 	})
 	if err != nil {
 		utils.ResponseError(w, err)
