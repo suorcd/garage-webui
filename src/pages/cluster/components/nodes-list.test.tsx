@@ -68,7 +68,7 @@ const nodes: Node[] = [
     addr: "10.0.0.1:3903",
     isUp: true,
     lastSeenSecsAgo: 5,
-    role: { zone: "dc1", capacity: 5 * GB, tags: ["fast"] },
+    role: { zone: "DC1", capacity: 5 * GB, tags: ["fast"] },
     dataPartition: { available: 0, total: 0 },
   },
   {
@@ -131,6 +131,30 @@ describe("NodesList", () => {
 
     expect(screen.getByText("node-b")).toBeTruthy();
     expect(screen.queryByText("node-a")).toBeNull();
+  });
+
+  it("matches a zone regardless of case", async () => {
+    const user = userEvent.setup();
+    renderList(newClient());
+    await waitFor(() => expect(screen.getByText("node-a")).toBeTruthy());
+
+    await user.type(screen.getByPlaceholderText("Search..."), "dc1");
+
+    expect(screen.getByText("node-a")).toBeTruthy();
+    expect(screen.queryByText("node-b")).toBeNull();
+    expect(screen.queryByText("node-c")).toBeNull();
+  });
+
+  it("matches a zone when the query has uppercase letters", async () => {
+    const user = userEvent.setup();
+    renderList(newClient());
+    await waitFor(() => expect(screen.getByText("node-a")).toBeTruthy());
+
+    await user.type(screen.getByPlaceholderText("Search..."), "DC1");
+
+    expect(screen.getByText("node-a")).toBeTruthy();
+    expect(screen.queryByText("node-b")).toBeNull();
+    expect(screen.queryByText("node-c")).toBeNull();
   });
 
   it("shows 0% instead of NaN% when a partition total is zero", async () => {

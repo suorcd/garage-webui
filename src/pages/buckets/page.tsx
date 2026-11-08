@@ -25,8 +25,8 @@ const BucketsPage = () => {
       const q = search.toLowerCase();
       buckets = buckets.filter(
         (bucket) =>
-          bucket.id.includes(q) ||
-          bucket.aliases.find((alias) => alias.includes(q))
+          bucket.id.toLowerCase().includes(q) ||
+          bucket.aliases.find((alias) => alias.toLowerCase().includes(q))
       );
     }
 
