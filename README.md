@@ -242,7 +242,7 @@ $ pnpm install
 $ dev
 ```
 
-`dev` starts a single-node Garage instance on ports 3900 (S3), 3901 (RPC), and 3903 (admin API), provisions the `garage-webui` bucket alias and `dev-key` access key, and then runs the Go API with live reload on port 3909 and Vite on port 5173. The `dev` script disables authentication. Do not expose the development server to an untrusted network.
+`dev` starts a single-node Garage instance on ports 3900 (S3), 3901 (RPC), 3902 (website), and 3903 (admin API), provisions the `garage-webui` bucket alias and `dev-key` access key, and then runs the Go API with live reload on port 3909 and Vite on port 5173. The `dev` script disables authentication. Do not expose the development server to an untrusted network.
 
 The local Garage data lives in `.dev/garage`. To stop it and remove all local development state, run:
 
@@ -256,7 +256,7 @@ Its development credentials are:
 
 - Admin token: `dev-admin-token`
 - Bucket alias: `garage-webui`
-- Key name: `dev-key` (run `scripts/garage-setup.sh` to print its ID and secret)
+- Key name: `dev-key` (run `scripts/garage-setup.sh --show-credentials` to print its ID and secret)
 
 To run the pieces separately, use:
 

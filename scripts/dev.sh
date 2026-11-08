@@ -6,6 +6,8 @@
 #   - the Go API with live reload (Air) on :3909
 #   - the Vite dev server on :5173
 #
+# If another service answers at the admin URL with a different token, the
+# script stops instead of starting a second Garage.
 # Run this from `nix develop` (or any shell with garage, go, node, pnpm and air).
 set -euo pipefail
 
@@ -44,6 +46,12 @@ trap cleanup EXIT INT TERM
 if curl -fsS -H "Authorization: Bearer $API_ADMIN_KEY" \
   "$API_BASE_URL/v2/ListBuckets" >/dev/null 2>&1; then
   echo "Using the Garage instance already running at $API_BASE_URL"
+elif curl -s "$API_BASE_URL/v2/ListBuckets" >/dev/null 2>&1; then
+  # Something answers here, but it did not accept the admin token. Start no
+  # second Garage: it would fail to bind. Stop here with a clear message.
+  echo "error: something already answers at $API_BASE_URL but the admin token does not match" >&2
+  echo "Set API_ADMIN_KEY to the running instance token, or stop that instance first." >&2
+  exit 1
 else
   echo "Starting local Garage; logs are in .dev/garage/server.log"
   garage -c "$CONFIG_PATH" server >.dev/garage/server.log 2>&1 &
