@@ -17,6 +17,9 @@ const Chips = forwardRef<HTMLDivElement, Props>(
 
     const onKeyDown = (e: React.KeyboardEvent) => {
       if (!onClick) return;
+      // Enter/Space on the remove button must activate that button, not the
+      // chip: preventDefault here would cancel its native activation.
+      if (e.target !== e.currentTarget) return;
       if (e.key === "Enter" || e.key === " ") {
         e.preventDefault();
         onClick();

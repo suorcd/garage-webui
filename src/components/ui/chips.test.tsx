@@ -50,6 +50,26 @@ describe("Chips", () => {
     expect(document.querySelectorAll("button button")).toHaveLength(0);
   });
 
+  it("removes with the keyboard without firing the chip action", async () => {
+    const onClick = vi.fn();
+    const onRemove = vi.fn();
+    const user = userEvent.setup();
+
+    render(
+      <Chips onClick={onClick} onRemove={onRemove}>
+        Tag
+      </Chips>
+    );
+    const chip = screen.getByRole("button", { name: "Tag" });
+    within(chip).getByRole("button").focus();
+
+    await user.keyboard("{Enter}");
+    await user.keyboard(" ");
+
+    expect(onRemove).toHaveBeenCalledTimes(2);
+    expect(onClick).not.toHaveBeenCalled();
+  });
+
   it("calls the click handler on Enter and Space", async () => {
     const onClick = vi.fn();
     const user = userEvent.setup();
