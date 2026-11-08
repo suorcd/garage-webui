@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strconv"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -75,9 +76,42 @@ func (f *fakeS3) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		f.handleList(w, r)
 	case r.Method == http.MethodPost && r.URL.Query().Has("delete"):
 		f.handleDelete(w, r)
+	case r.Method == http.MethodHead:
+		f.handleHead(w, r)
+	case r.Method == http.MethodGet:
+		f.handleGet(w, r)
 	default:
 		http.Error(w, "unexpected request", http.StatusBadRequest)
 	}
+}
+
+func (f *fakeS3) handleHead(w http.ResponseWriter, r *http.Request) {
+	key := strings.TrimPrefix(r.URL.Path, "/test-bucket/")
+	for _, k := range f.keys {
+		if k == key {
+			w.Header().Set("Content-Length", "0")
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+	}
+
+	w.Header().Set("Content-Type", "application/xml")
+	w.WriteHeader(http.StatusNotFound)
+	fmt.Fprint(w, `<?xml version="1.0" encoding="UTF-8"?><Error><Code>NoSuchKey</Code><Message>The specified key does not exist.</Message></Error>`)
+}
+
+func (f *fakeS3) handleGet(w http.ResponseWriter, r *http.Request) {
+	key := strings.TrimPrefix(r.URL.Path, "/test-bucket/")
+	if key == "truncated.txt" {
+		w.Header().Set("Content-Type", "application/octet-stream")
+		w.Header().Set("Content-Length", "100")
+		w.Header().Set("Last-Modified", time.Now().UTC().Format(http.TimeFormat))
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("0123456789"))
+		return
+	}
+
+	http.Error(w, "unexpected request", http.StatusBadRequest)
 }
 
 func (f *fakeS3) handleList(w http.ResponseWriter, r *http.Request) {
@@ -183,11 +217,62 @@ func newFakeS3Server(t *testing.T, fake *fakeS3) *httptest.Server {
 	return server
 }
 
+func seedReadBucketAccess(t *testing.T) {
+	t.Helper()
+
+	utils.Cache.Set("key:test-bucket:read", &bucketAccess{
+		S3Bucket: "test-bucket",
+		Credentials: credentials.NewStaticCredentialsProvider(
+			"test-access-key",
+			"test-secret-key",
+			"",
+		),
+	}, time.Hour)
+}
+
 func testBrowseMux() *http.ServeMux {
 	mux := http.NewServeMux()
 	browse := &Browse{}
 	mux.HandleFunc("DELETE /browse/{bucket}/{key...}", browse.DeleteObject)
+	mux.HandleFunc("GET /browse/{bucket}/{key...}", browse.GetOneObject)
 	return mux
+}
+
+func TestGetOneObjectHeadFailureReturnsSingleErrorResponse(t *testing.T) {
+	fake := &fakeS3{}
+	newFakeS3Server(t, fake)
+	seedReadBucketAccess(t)
+
+	req := httptest.NewRequest(http.MethodGet, "/browse/test-bucket/missing.txt", nil)
+	rec := httptest.NewRecorder()
+	testBrowseMux().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("expected status 500, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	body := rec.Body.String()
+	want := "operation error S3: HeadObject, https response error StatusCode: 404, RequestID: , HostID: , NotFound: "
+	if body != want {
+		t.Errorf("expected a single error body %q, got %q", want, body)
+	}
+}
+
+func TestGetOneObjectCopyFailureReturnsOnlyObjectBytes(t *testing.T) {
+	fake := &fakeS3{}
+	newFakeS3Server(t, fake)
+	seedReadBucketAccess(t)
+
+	req := httptest.NewRequest(http.MethodGet, "/browse/test-bucket/truncated.txt?view=1", nil)
+	rec := httptest.NewRecorder()
+	testBrowseMux().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	if got := rec.Body.String(); got != "0123456789" {
+		t.Errorf("expected only the object bytes, got %q", got)
+	}
 }
 
 func TestDeleteObjectRecursiveDeletesAllPages(t *testing.T) {
