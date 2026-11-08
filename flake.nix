@@ -33,6 +33,11 @@
           pname = "garage-webui-frontend";
           inherit version src;
 
+          # The base path the frontend build bakes in. Empty means the
+          # root. Override it for a subpath build, for example:
+          # frontend.overrideAttrs { VITE_BASE_PATH = "/sub"; }
+          VITE_BASE_PATH = "";
+
           nativeBuildInputs = with pkgs; [
             nodejs_22
             pnpm_10
