@@ -109,4 +109,15 @@ describe("KeysPage", () => {
 
     expect(screen.getByText('No matches for "zzz"')).toBeTruthy();
   });
+
+  it("does not claim the cluster is empty when the list fails", () => {
+    keysState.data = null;
+    keysState.isError = true;
+    keysState.error = new Error("Keys unavailable");
+
+    renderPage();
+
+    expect(screen.getByText(/Keys unavailable/)).toBeTruthy();
+    expect(screen.queryByText("No keys yet")).toBeNull();
+  });
 });
