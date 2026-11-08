@@ -198,6 +198,16 @@ const NodesList = ({ nodes }: NodeListProps) => {
           </Table.Head>
 
           <Table.Body>
+            {items.length === 0 ? (
+              <tr>
+                <td className="text-center py-16" colSpan={7}>
+                  {filter.search
+                    ? `No matches for "${filter.search}"`
+                    : "No nodes yet"}
+                </td>
+              </tr>
+            ) : null}
+
             {items.map((item, idx) => (
               <Table.Row
                 key={item.id}

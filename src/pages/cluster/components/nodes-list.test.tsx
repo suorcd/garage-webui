@@ -89,10 +89,10 @@ const nodes: Node[] = [
   },
 ];
 
-function renderList(queryClient: QueryClient) {
+function renderList(queryClient: QueryClient, list: Node[] = nodes) {
   return render(
     <QueryClientProvider client={queryClient}>
-      <NodesList nodes={nodes} />
+      <NodesList nodes={list} />
     </QueryClientProvider>
   );
 }
@@ -245,5 +245,21 @@ describe("NodesList", () => {
     fireEvent.click(screen.getByRole("button", { name: "Revert" }));
 
     expect(revertMutate).toHaveBeenCalledWith();
+  });
+
+  it("shows an empty state when the cluster has no nodes", () => {
+    renderList(newClient(), []);
+
+    expect(screen.getByText("No nodes yet")).toBeTruthy();
+  });
+
+  it("shows a no-match state when the search matches no node", async () => {
+    const user = userEvent.setup();
+    renderList(newClient());
+    await waitFor(() => expect(screen.getByText("node-a")).toBeTruthy());
+
+    await user.type(screen.getByPlaceholderText("Search..."), "zzz");
+
+    expect(screen.getByText('No matches for "zzz"')).toBeTruthy();
   });
 });

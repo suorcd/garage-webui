@@ -14,6 +14,7 @@ import {
 import { useBucketContext } from "../context";
 import ObjectActions from "./object-actions";
 import GotoTopButton from "@/components/ui/goto-top-btn";
+import { useState } from "react";
 
 type Props = {
   prefix?: string;
@@ -148,6 +149,7 @@ type FilePreviewProps = {
 };
 
 const FilePreview = ({ ext, object }: FilePreviewProps) => {
+  const [failed, setFailed] = useState(false);
   const type = mime.getType(ext || "")?.split("/")[0];
   let Icon = FileIcon;
 
@@ -159,13 +161,17 @@ const FilePreview = ({ ext, object }: FilePreviewProps) => {
 
   if (type === "image") {
     const thumbnailSupport = ["jpg", "jpeg", "png", "gif"].includes(ext || "");
-    return (
-      <img
-        src={API_URL + object.url + (thumbnailSupport ? "?thumb=1" : "?view=1")}
-        alt={object.objectKey}
-        className="size-5 object-cover overflow-hidden mr-2"
-      />
-    );
+    if (thumbnailSupport && !failed) {
+      return (
+        <img
+          src={API_URL + object.url + "?thumb=1"}
+          alt={object.objectKey}
+          loading="lazy"
+          onError={() => setFailed(true)}
+          className="size-5 object-cover overflow-hidden mr-2"
+        />
+      );
+    }
   }
 
   if (type === "text") {

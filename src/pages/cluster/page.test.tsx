@@ -1,24 +1,36 @@
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { PageContextProvider } from "@/context/page-context";
 
-const { nodeInfoState } = vi.hoisted(() => ({
+const { nodeInfoState, clusterStatusState } = vi.hoisted(() => ({
   nodeInfoState: {
     node: undefined as
       | { garageVersion: string; dbEngine: string }
       | undefined,
     error: undefined as string | undefined,
     isError: false,
+    isLoading: false,
     queryError: undefined as Error | undefined,
+  },
+  clusterStatusState: {
+    data: { layoutVersion: 3, nodes: [] } as {
+      layoutVersion: number;
+      nodes: unknown[];
+    } | null,
+    isLoading: false,
+    isError: false,
+    error: undefined as Error | undefined,
+    refetch: vi.fn(),
   },
 }));
 
 vi.mock("./hooks", () => ({
-  useClusterStatus: () => ({ data: { layoutVersion: 3, nodes: [] } }),
+  useClusterStatus: () => clusterStatusState,
   useNodeInfo: () => ({
     data: { node: nodeInfoState.node, error: nodeInfoState.error },
     isError: nodeInfoState.isError,
+    isLoading: nodeInfoState.isLoading,
     error: nodeInfoState.queryError,
   }),
 }));
@@ -53,7 +65,13 @@ describe("ClusterPage", () => {
     nodeInfoState.node = undefined;
     nodeInfoState.error = undefined;
     nodeInfoState.isError = false;
+    nodeInfoState.isLoading = false;
     nodeInfoState.queryError = undefined;
+    clusterStatusState.data = { layoutVersion: 3, nodes: [] };
+    clusterStatusState.isLoading = false;
+    clusterStatusState.isError = false;
+    clusterStatusState.error = undefined;
+    clusterStatusState.refetch.mockClear();
   });
 
   it("surfaces a node-info error instead of blank details", () => {
@@ -81,5 +99,36 @@ describe("ClusterPage", () => {
     expect(screen.getByText("2.5.0")).toBeTruthy();
     expect(screen.getByText("sqlite")).toBeTruthy();
     expect(screen.queryByText(/connection refused/)).toBeNull();
+  });
+
+  it("shows a loading indicator while the cluster status loads", () => {
+    clusterStatusState.data = null;
+    clusterStatusState.isLoading = true;
+
+    renderPage();
+
+    expect(screen.getByRole("status")).toBeTruthy();
+  });
+
+  it("shows a loading indicator while node info loads", () => {
+    nodeInfoState.isLoading = true;
+
+    renderPage();
+
+    expect(screen.getByRole("status")).toBeTruthy();
+  });
+
+  it("shows an error alert with retry when the cluster status fails", () => {
+    clusterStatusState.data = null;
+    clusterStatusState.isError = true;
+    clusterStatusState.error = new Error("Gateway timeout");
+
+    renderPage();
+
+    expect(screen.getByText(/Gateway timeout/)).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "Retry" }));
+
+    expect(clusterStatusState.refetch).toHaveBeenCalled();
   });
 });

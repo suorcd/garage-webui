@@ -1,10 +1,10 @@
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { PageContextProvider } from "@/context/page-context";
 
-const { bucketData } = vi.hoisted(() => ({
+const { bucketData, bucketState } = vi.hoisted(() => ({
   bucketData: {
     id: "b-noalias",
     globalAliases: [] as string[],
@@ -26,15 +26,16 @@ const { bucketData } = vi.hoisted(() => ({
     unfinishedMultipartUploadBytes: 0,
     quotas: { maxSize: null, maxObjects: null },
   },
+  bucketState: {
+    data: null as unknown,
+    error: null as Error | null,
+    isLoading: false,
+    refetch: vi.fn(),
+  },
 }));
 
 vi.mock("./hooks", () => ({
-  useBucket: () => ({
-    data: bucketData,
-    error: null,
-    isLoading: false,
-    refetch: vi.fn(),
-  }),
+  useBucket: () => bucketState,
   useUpdateBucket: () => ({ mutate: vi.fn(), isPending: false }),
   useAddAlias: () => ({ mutate: vi.fn(), isPending: false }),
   useRemoveAlias: () => ({ mutate: vi.fn(), isPending: false }),
@@ -78,6 +79,13 @@ function renderPage() {
 describe("ManageBucketPage", () => {
   afterEach(cleanup);
 
+  beforeEach(() => {
+    bucketState.data = bucketData;
+    bucketState.error = null;
+    bucketState.isLoading = false;
+    bucketState.refetch.mockClear();
+  });
+
   it("falls back to the bucket id for bucketName when the bucket has no alias", () => {
     renderPage();
 
@@ -93,5 +101,18 @@ describe("ManageBucketPage", () => {
     } finally {
       bucketData.keys[0].bucketLocalAliases = [];
     }
+  });
+
+  it("retries the bucket load from the error alert", () => {
+    bucketState.data = null;
+    bucketState.error = new Error("Bucket not found");
+
+    renderPage();
+
+    expect(screen.getByText(/Bucket not found/)).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "Retry" }));
+
+    expect(bucketState.refetch).toHaveBeenCalled();
   });
 });

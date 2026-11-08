@@ -1,7 +1,7 @@
 import Button from "@/components/ui/button";
 import Page from "@/context/page-context";
-import { Copy, Eye, EyeOff, Trash } from "lucide-react";
-import { Badge, Card, Input, Table } from "react-daisyui";
+import { Copy, CircleXIcon, Eye, EyeOff, Trash } from "lucide-react";
+import { Alert, Badge, Card, Input, Table } from "react-daisyui";
 import { useKeys, useRemoveKey } from "./hooks";
 import CreateKeyDialog from "./components/create-key-dialog";
 import { toast } from "sonner";
@@ -9,6 +9,7 @@ import { copyToClipboard, dayjs, handleError } from "@/lib/utils";
 import { useCallback, useMemo, useState } from "react";
 import api from "@/lib/api";
 import { Key } from "./types";
+import PageLoading from "@/components/ui/page-loading";
 
 type KeySecret = {
   secretAccessKey?: string | null;
@@ -34,7 +35,7 @@ const isExpiringSoon = (key: Key) => {
 };
 
 const KeysPage = () => {
-  const { data, refetch } = useKeys();
+  const { data, isLoading, isError, error, refetch } = useKeys();
   const [search, setSearch] = useState("");
   const [secretKeys, setSecretKeys] = useState<Record<string, string>>({});
   const [pendingSecrets, setPendingSecrets] = useState<Record<string, boolean>>(
@@ -120,6 +121,13 @@ const KeysPage = () => {
       </div>
 
       <Card className="card-body mt-4 md:mt-8 p-4">
+        {isError && (
+          <Alert status="error" icon={<CircleXIcon />}>
+            <span>{error?.message}</span>
+            <Button onClick={() => refetch()}>Retry</Button>
+          </Alert>
+        )}
+
         <div className="w-full overflow-x-auto">
           <Table zebra>
             <Table.Head>
@@ -132,6 +140,20 @@ const KeysPage = () => {
             </Table.Head>
 
             <Table.Body>
+              {isLoading ? (
+                <tr>
+                  <td colSpan={5}>
+                    <PageLoading />
+                  </td>
+                </tr>
+              ) : !items?.length ? (
+                <tr>
+                  <td colSpan={5} className="text-center py-16">
+                    {search ? `No matches for "${search}"` : "No keys yet"}
+                  </td>
+                </tr>
+              ) : null}
+
               {items?.map((key, idx) => (
                 <Table.Row key={key.id}>
                   <span>{idx + 1}</span>

@@ -14,6 +14,7 @@ import MenuButton from "./components/menu-button";
 import BrowseTab from "./browse/browse-tab";
 import { BucketContext } from "./context";
 import { Alert, Loading } from "react-daisyui";
+import Button from "@/components/ui/button";
 
 const tabs: Tab[] = [
   {
@@ -63,6 +64,7 @@ const ManageBucketPage = () => {
       {error != null && (
         <Alert status="error" icon={<CircleXIcon />}>
           <span>{error.message}</span>
+          <Button onClick={() => refetch()}>Retry</Button>
         </Alert>
       )}
 
