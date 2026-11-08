@@ -143,6 +143,7 @@ const AssignNodeDialog = () => {
               <Select2
                 creatable
                 {...field}
+                inputId={field.id}
                 value={
                   field.value
                     ? { label: field.value, value: field.value }
@@ -229,6 +230,7 @@ const AssignNodeDialog = () => {
                 creatable
                 isMulti
                 {...field}
+                inputId={field.id}
                 value={
                   field.value
                     ? (field.value as string[]).map((value) => ({

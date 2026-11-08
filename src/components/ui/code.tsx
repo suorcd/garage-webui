@@ -19,6 +19,7 @@ const Code = ({ className, children, ...props }: Props) => {
       {children}
       <Button
         icon={Copy}
+        aria-label="Copy"
         className="absolute right-0 top-0"
         color="ghost"
         onClick={() => copyToClipboard(children || "")}

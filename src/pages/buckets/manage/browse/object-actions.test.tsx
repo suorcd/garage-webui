@@ -64,6 +64,24 @@ const renderObjectActions = (objectKey = "dir/", end?: boolean) => {
   );
 };
 
+describe("ObjectActions button names", () => {
+  afterEach(cleanup);
+
+  it("names the download button", () => {
+    renderObjectActions("file.txt");
+
+    expect(screen.getByRole("button", { name: "Download" })).toBeTruthy();
+  });
+
+  it("names the row actions toggle", () => {
+    renderObjectActions("file.txt");
+
+    expect(
+      screen.getByRole("button", { name: "More actions" })
+    ).toBeTruthy();
+  });
+});
+
 describe("ObjectActions Share item", () => {
   afterEach(cleanup);
 

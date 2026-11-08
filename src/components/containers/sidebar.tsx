@@ -5,12 +5,11 @@ import {
   KeySquare,
   LayoutDashboard,
   LogOut,
-  Palette,
 } from "lucide-react";
-import { Dropdown, Menu } from "react-daisyui";
+import { Menu } from "react-daisyui";
 import { Link, useLocation } from "react-router-dom";
 import Button from "../ui/button";
-import { themes } from "@/app/themes";
+import { themes, type Themes } from "@/app/themes";
 import appStore from "@/stores/app-store";
 import garageLogo from "@/assets/garage-logo.svg";
 import { useMutation } from "@tanstack/react-query";
@@ -18,6 +17,7 @@ import api from "@/lib/api";
 import * as utils from "@/lib/utils";
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/useAuth";
+import { useStore } from "zustand";
 
 const pages = [
   { icon: LayoutDashboard, title: "Dashboard", path: "/", exact: true },
@@ -29,13 +29,14 @@ const pages = [
 const Sidebar = () => {
   const { pathname } = useLocation();
   const auth = useAuth();
+  const theme = useStore(appStore, (i) => i.theme);
 
   return (
     <aside className="bg-base-100 border-r border-base-300/30 w-[80%] md:w-[250px] flex flex-col items-stretch overflow-hidden h-full">
       <div className="p-4">
         <img
           src={garageLogo}
-          alt="logo"
+          alt="Garage WebUI logo"
           className="w-full max-w-[100px] mx-auto"
         />
         <p className="text-sm font-medium text-center">WebUI</p>
@@ -51,7 +52,7 @@ const Sidebar = () => {
               <Link
                 to={page.path}
                 className={cn(
-                  "h-12 flex items-center px-6",
+                  "h-12 flex items-center gap-x-2 px-6",
                   isActive &&
                     "bg-primary text-primary-content hover:bg-primary/60 focus:bg-primary focus:text-primary-content"
                 )}
@@ -65,24 +66,18 @@ const Sidebar = () => {
       </Menu>
 
       <div className="py-2 px-4 flex items-center gap-2">
-        <Dropdown vertical="top">
-          <Dropdown.Toggle button={false}>
-            <Button icon={Palette} color="ghost">
-              {!auth.isEnabled ? "Theme" : null}
-            </Button>
-          </Dropdown.Toggle>
-
-          <Dropdown.Menu className="max-h-[500px] overflow-y-auto">
-            {themes.map((theme) => (
-              <Dropdown.Item
-                key={theme}
-                onClick={() => appStore.setTheme(theme)}
-              >
-                {ucfirst(theme)}
-              </Dropdown.Item>
-            ))}
-          </Dropdown.Menu>
-        </Dropdown>
+        <select
+          aria-label="Theme"
+          className="select select-ghost select-sm flex-1 min-w-0"
+          value={theme}
+          onChange={(e) => appStore.setTheme(e.target.value as Themes)}
+        >
+          {themes.map((theme) => (
+            <option key={theme} value={theme}>
+              {ucfirst(theme)}
+            </option>
+          ))}
+        </select>
 
         {auth.isEnabled ? <LogoutButton /> : null}
       </div>

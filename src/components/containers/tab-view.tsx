@@ -1,6 +1,12 @@
 import { cn } from "@/lib/utils";
 import { LucideIcon } from "lucide-react";
-import { useCallback, useEffect, useMemo, useRef } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  type ReactElement,
+} from "react";
 import { Tabs } from "react-daisyui";
 import { useSearchParams } from "react-router-dom";
 
@@ -8,7 +14,7 @@ export type Tab = {
   name: string;
   title?: string;
   icon?: LucideIcon;
-  Component?: () => JSX.Element | null;
+  Component?: () => ReactElement | null;
 };
 
 type Props = {

@@ -108,6 +108,7 @@ const Actions = ({ prefix, canWrite }: Props) => {
             ? "Upload File"
             : "A key with write access is required to upload objects."
         }
+        aria-label="Upload file"
         onClick={onUploadFile}
         disabled={!canWrite || uploading}
         loading={uploading}
@@ -172,6 +173,7 @@ const CreateFolderAction = ({ prefix, canWrite }: CreateFolderActionProps) => {
             ? "Create Folder"
             : "A key with write access is required to create folders."
         }
+        aria-label="Create folder"
         disabled={!canWrite}
       />
 

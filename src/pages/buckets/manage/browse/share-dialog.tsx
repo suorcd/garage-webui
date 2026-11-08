@@ -71,6 +71,7 @@ const ShareDialog = () => {
           />
           <Button
             icon={Copy}
+            aria-label="Copy link"
             onClick={() => copyToClipboard(url)}
             className="absolute top-0 right-0"
             color="ghost"

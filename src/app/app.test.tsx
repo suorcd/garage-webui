@@ -1,7 +1,14 @@
 import { QueryClientProvider, useQuery } from "@tanstack/react-query";
-import { renderHook, waitFor } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import {
+  cleanup,
+  render,
+  renderHook,
+  screen,
+  waitFor,
+} from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type { ReactNode } from "react";
+import { toast } from "sonner";
 import { APIError } from "@/lib/api";
 import { createQueryClient } from "./query-client";
 
@@ -90,5 +97,38 @@ describe("createQueryClient defaults", () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+});
+
+describe("Toaster limits", () => {
+  afterEach(() => {
+    cleanup();
+    toast.dismiss();
+    vi.clearAllMocks();
+  });
+
+  it("shows at most five toasts, at the top right, each with a close button", async () => {
+    const { default: App } = await import("./app");
+    render(<App />);
+
+    for (let i = 0; i < 7; i++) {
+      toast.error(`boom ${i}`);
+    }
+
+    await waitFor(() =>
+      expect(
+        document.querySelectorAll("[data-sonner-toast]"),
+      ).toHaveLength(7),
+    );
+    const visible = [...document.querySelectorAll("[data-sonner-toast]")].filter(
+      (el) => el.getAttribute("data-visible") === "true",
+    );
+    expect(visible).toHaveLength(5);
+    expect(
+      screen.getAllByRole("button", { name: "Close toast" }).length,
+    ).toBeGreaterThan(0);
+    const toaster = document.querySelector("[data-sonner-toaster]");
+    expect(toaster?.getAttribute("data-y-position")).toBe("top");
+    expect(toaster?.getAttribute("data-x-position")).toBe("right");
   });
 });

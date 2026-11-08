@@ -113,6 +113,7 @@ const KeysPage = () => {
       <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
         <Input
           placeholder="Search..."
+          aria-label="Search keys"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />
@@ -165,6 +166,7 @@ const KeysPage = () => {
                     <Button
                       size="sm"
                       icon={Copy}
+                      aria-label="Copy key ID"
                       onClick={() => copyToClipboard(key.id)}
                     />
                   </div>
@@ -204,6 +206,7 @@ const KeysPage = () => {
                       <Button
                         size="sm"
                         icon={Copy}
+                        aria-label="Copy secret"
                         onClick={() => copyToClipboard(secretKeys[key.id])}
                       />
                       <Button
@@ -221,6 +224,7 @@ const KeysPage = () => {
                     <Button
                       color="ghost"
                       icon={Trash}
+                      aria-label={`Remove key ${key.name}`}
                       onClick={() => onRemove(key.id)}
                     />
                   </span>

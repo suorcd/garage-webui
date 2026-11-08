@@ -58,18 +58,18 @@ const ConnectNodeDialog = () => {
             <p>Run this command in your target node to get node id:</p>
             <Code className="mt-2">docker exec garage /garage node id</Code>
 
-            <p className="mt-8">Enter node id:</p>
             <InputField
               form={form}
               name="nodeId"
+              title="Node ID"
               placeholder="..."
               inputClassName="w-full"
             />
 
-            <p className="mt-4">Enter node address (optional):</p>
             <InputField
               form={form}
               name="address"
+              title="Node address (optional)"
               placeholder="127.0.0.1:3901"
               inputClassName="w-full"
             />

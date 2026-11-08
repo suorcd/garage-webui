@@ -104,6 +104,7 @@ const PermissionsTab = () => {
                       </span>
                       <Button
                         icon={Trash}
+                        aria-label={`Remove key ${label}`}
                         onClick={() => onRemove(key.accessKeyId)}
                       />
                     </Table.Row>

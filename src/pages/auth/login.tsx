@@ -40,6 +40,7 @@ export default function LoginPage() {
             name="username"
             title="Username"
             placeholder="Enter your username"
+            autoComplete="username"
           />
 
           <InputField
@@ -48,6 +49,7 @@ export default function LoginPage() {
             title="Password"
             type="password"
             placeholder="Enter your password"
+            autoComplete="current-password"
           />
 
           <Card.Actions className="mt-4">

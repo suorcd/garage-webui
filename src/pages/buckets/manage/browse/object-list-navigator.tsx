@@ -33,6 +33,7 @@ const ObjectListNavigator = ({
           disabled={curPrefix < 0}
           onClick={onGoBack}
           className="col-span-2"
+          aria-label="Back"
         />
         <Button
           icon={ChevronRight}
@@ -40,12 +41,14 @@ const ObjectListNavigator = ({
           disabled={curPrefix >= prefixHistory.length - 1}
           onClick={onGoForward}
           className="col-span-2"
+          aria-label="Forward"
         />
       </div>
 
       <div className="order-3 md:order-2 flex flex-row w-full overflow-x-auto items-center bg-base-200 h-10 flex-1 shrink-0 min-w-[80%] md:min-w-0 rounded-lg mx-2 px-2">
         <HistoryItem
           icon={Home}
+          ariaLabel="Home"
           isActive={curPrefix === -1}
           onClick={() => setCurPrefix(-1)}
         />
@@ -75,6 +78,7 @@ const ObjectListNavigator = ({
 type HistoryItemProps = {
   icon?: LucideIcon;
   title?: string;
+  ariaLabel?: string;
   isActive: boolean;
   onClick: () => void;
 };
@@ -82,6 +86,7 @@ type HistoryItemProps = {
 const HistoryItem = ({
   icon: Icon,
   title,
+  ariaLabel,
   isActive,
   onClick,
 }: HistoryItemProps) => {
@@ -92,6 +97,7 @@ const HistoryItem = ({
   return (
     <a
       href="#"
+      aria-label={ariaLabel}
       onClick={(e) => {
         e.preventDefault();
         onClick();

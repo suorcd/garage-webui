@@ -113,4 +113,10 @@ describe("ShareDialog domains", () => {
       )
     ).toBeTruthy();
   });
+
+  it("names the copy button", () => {
+    renderDialog();
+
+    expect(screen.getByRole("button", { name: "Copy link" })).toBeTruthy();
+  });
 });

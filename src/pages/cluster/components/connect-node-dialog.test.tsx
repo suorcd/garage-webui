@@ -120,4 +120,14 @@ describe("ConnectNodeDialog", () => {
       })
     );
   });
+
+  it("links the field titles to their inputs", async () => {
+    const user = userEvent.setup();
+    await openDialog(user);
+
+    expect(screen.getByLabelText("Node ID")).toBeTruthy();
+    expect(
+      screen.getByLabelText("Node address (optional)")
+    ).toBeTruthy();
+  });
 });

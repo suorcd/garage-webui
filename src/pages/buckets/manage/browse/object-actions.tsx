@@ -102,12 +102,21 @@ const ObjectActions = ({ prefix = "", object, end }: Props) => {
     <td className="!p-0 w-auto">
       <span className="w-full flex flex-row justify-end pr-2">
         {!isDirectory && (
-          <Button icon={DownloadIcon} color="ghost" onClick={onDownload} />
+          <Button
+            icon={DownloadIcon}
+            color="ghost"
+            onClick={onDownload}
+            aria-label="Download"
+          />
         )}
 
         <Dropdown end vertical={end ? "top" : "bottom"}>
           <Dropdown.Toggle button={false}>
-            <Button icon={EllipsisVertical} color="ghost" />
+            <Button
+              icon={EllipsisVertical}
+              color="ghost"
+              aria-label="More actions"
+            />
           </Dropdown.Toggle>
 
           <Dropdown.Menu className="gap-y-1">

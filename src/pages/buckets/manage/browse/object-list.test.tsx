@@ -211,3 +211,76 @@ describe("ObjectList object view", () => {
     expect(opened).not.toContain("%2523");
   });
 });
+
+describe("ObjectList row keyboard access", () => {
+  afterEach(() => {
+    cleanup();
+    vi.restoreAllMocks();
+  });
+
+  beforeEach(() => {
+    bucketContext.bucket.globalAliases = [];
+    browseResult.prefixes = ["photos/"];
+    browseResult.objects = [
+      {
+        objectKey: "file.txt",
+        url: "/browse/bucket-b/file.txt",
+        size: 10,
+        lastModified: new Date("2026-01-01T00:00:00Z"),
+      },
+    ];
+    vi.spyOn(window, "open").mockImplementation(() => null);
+  });
+
+  function renderListWithPrefix(onPrefixChange: (prefix: string) => void) {
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    return render(
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter initialEntries={["/browse?prefix="]}>
+          <ObjectList prefix="" onPrefixChange={onPrefixChange} />
+        </MemoryRouter>
+      </QueryClientProvider>
+    );
+  }
+
+  it("opens a folder with Enter", async () => {
+    const user = userEvent.setup();
+    const onPrefixChange = vi.fn();
+    renderListWithPrefix(onPrefixChange);
+
+    const folder = screen.getByRole("button", { name: "Open folder photos" });
+    folder.focus();
+    await user.keyboard("{Enter}");
+
+    expect(onPrefixChange).toHaveBeenCalledWith("photos/");
+  });
+
+  it("opens a folder with Space", async () => {
+    const user = userEvent.setup();
+    const onPrefixChange = vi.fn();
+    renderListWithPrefix(onPrefixChange);
+
+    const folder = screen.getByRole("button", { name: "Open folder photos" });
+    folder.focus();
+    await user.keyboard(" ");
+
+    expect(onPrefixChange).toHaveBeenCalledWith("photos/");
+  });
+
+  it("opens a file with Enter", async () => {
+    const user = userEvent.setup();
+    renderListWithPrefix(vi.fn());
+
+    const file = screen.getByRole("button", { name: "Open file.txt" });
+    file.focus();
+    await user.keyboard("{Enter}");
+
+    expect(window.open).toHaveBeenCalledWith(
+      expect.stringContaining("?view=1"),
+      "_blank",
+      "noopener,noreferrer"
+    );
+  });
+});

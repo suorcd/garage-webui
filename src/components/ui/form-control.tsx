@@ -19,7 +19,11 @@ type FormControlProps<
   title?: string;
 
   render: (
-    field: ControllerRenderProps<T, U>,
+    field: ControllerRenderProps<T, U> & {
+      id: string;
+      "aria-describedby"?: string;
+      "aria-invalid"?: boolean;
+    },
     fieldProps: {
       fieldState: ControllerFieldState;
       formState: UseFormStateReturn<T>;
@@ -38,19 +42,37 @@ const FormControl = <T extends FieldValues>({
     <Controller
       control={form.control}
       name={name}
-      render={({ field, fieldState, formState }) => (
-        <div className={cn("form-control", className)}>
-          {title ? <label className="label label-text">{title}</label> : null}
+      render={({ field, fieldState, formState }) => {
+        const inputId = field.name;
+        const errorId = `${field.name}-error`;
+        const error = fieldState.error;
+        return (
+          <div className={cn("form-control", className)}>
+            {title ? (
+              <label htmlFor={inputId} className="label label-text">
+                {title}
+              </label>
+            ) : null}
 
-          {render(field, { fieldState, formState })}
+            {render(
+              {
+                ...field,
+                id: inputId,
+                ...(error
+                  ? { "aria-describedby": errorId, "aria-invalid": true }
+                  : {}),
+              },
+              { fieldState, formState }
+            )}
 
-          {fieldState.error ? (
-            <label className="label label-text text-error">
-              {fieldState.error.message}
-            </label>
-          ) : null}
-        </div>
-      )}
+            {error ? (
+              <p id={errorId} role="alert" className="label label-text text-error">
+                {error.message}
+              </p>
+            ) : null}
+          </div>
+        );
+      }}
     />
   );
 };
