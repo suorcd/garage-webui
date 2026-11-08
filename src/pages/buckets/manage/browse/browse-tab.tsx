@@ -33,17 +33,50 @@ const BrowseTab = () => {
   );
   const [curPrefix, setCurPrefix] = useState(prefixHistory.length - 1);
 
-  useEffect(() => {
-    const prefix = prefixHistory[curPrefix] || "";
+  const writePrefixToUrl = (prefix: string) => {
     const newParams = new URLSearchParams(searchParams);
-    newParams.set("prefix", prefix);
+    if (prefix) {
+      newParams.set("prefix", prefix);
+    } else {
+      newParams.delete("prefix");
+    }
     setSearchParams(newParams);
-  }, [curPrefix]);
+  };
+
+  // Read the prefix back from the URL. Browser Back and Forward change the
+  // URL without in-app navigation, so the listing follows the URL here.
+  // State keeps the in-app history, so Forward still works after an in-app
+  // Back. A prefix already in the history only moves the index. Any other
+  // prefix rebuilds the history from the URL.
+  useEffect(() => {
+    const urlPrefix = searchParams.get("prefix") ?? "";
+    const currentPrefix = prefixHistory[curPrefix] ?? "";
+    if (urlPrefix === currentPrefix) return;
+    const index = prefixHistory.indexOf(urlPrefix);
+    if (index >= 0) {
+      setCurPrefix(index);
+      return;
+    }
+    const nextHistory = getInitialPrefixes(searchParams);
+    if (nextHistory.join("\n") === prefixHistory.join("\n")) return;
+    setPrefixHistory(nextHistory);
+    setCurPrefix(nextHistory.length - 1);
+  }, [searchParams, prefixHistory, curPrefix]);
 
   const gotoPrefix = (prefix: string) => {
     const history = prefixHistory.slice(0, curPrefix + 1);
     setPrefixHistory([...history, prefix]);
     setCurPrefix(history.length);
+    writePrefixToUrl(prefix);
+  };
+
+  const goToHistoryIndex: React.Dispatch<React.SetStateAction<number>> = (
+    next
+  ) => {
+    const index = typeof next === "function" ? next(curPrefix) : next;
+    if (index === curPrefix) return;
+    setCurPrefix(index);
+    writePrefixToUrl(prefixHistory[index] ?? "");
   };
 
   if (bucket.keys.length === 0) {
@@ -80,7 +113,7 @@ const BrowseTab = () => {
 
         <ObjectListNavigator
           curPrefix={curPrefix}
-          setCurPrefix={setCurPrefix}
+          setCurPrefix={goToHistoryIndex}
           prefixHistory={prefixHistory}
           actions={
             <Actions
