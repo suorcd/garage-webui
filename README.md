@@ -24,6 +24,8 @@ The Garage Web UI is available as a single executable binary and docker image. Y
 $ docker run -p 3909:3909 -v ./garage.toml:/etc/garage.toml:ro --restart unless-stopped --name garage-webui khairul169/garage-webui:latest
 ```
 
+A plain HTTP container adds `-e SESSION_COOKIE_SECURE=false` to that command. With Compose, set it in `.env`; `docker-compose.yml` forwards it.
+
 The container does not start without `AUTH_USER_PASS`. See [Authentication](#authentication).
 
 CI publishes the fork image to `ghcr.io/suorcd/garage-webui` only for version tags.
@@ -216,7 +218,7 @@ The API requires the `X-Requested-With: XMLHttpRequest` header on every `POST`, 
 
 ### Running
 
-Once your instance of Garage Web UI is started, you can open the web UI at http://your-ip:3909. You can place it behind a reverse proxy to secure it with SSL. A plain HTTP install must set `SESSION_COOKIE_SECURE=false`, or the browser drops the session cookie and login never sticks.
+Once your instance of Garage Web UI is started, you can open the web UI at http://your-ip:3909. You can place it behind a reverse proxy to secure it with SSL. A plain HTTP install must set `SESSION_COOKIE_SECURE=false`, or the browser drops the session cookie and login never sticks. In a container, pass it as an environment variable (`-e` for `docker run`, `.env` for Compose); the image has no `.env` of its own.
 
 ## Development
 

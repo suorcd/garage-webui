@@ -2,16 +2,16 @@ package router
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
+	"golang.org/x/crypto/bcrypt"
+	"khairul169/garage-webui/utils"
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 	"time"
-
-	"khairul169/garage-webui/utils"
-
-	"golang.org/x/crypto/bcrypt"
 )
 
 func newTestAPIHandler() http.Handler {
@@ -753,6 +753,13 @@ func TestLoginCookieSecureAcceptsCapitalisedFalse(t *testing.T) {
 	}
 }
 
+// failingDeleteStore keeps session data in memory but fails every delete,
+// so a test can force RenewToken to fail.
+type failingDeleteStore struct {
+	mu    sync.Mutex
+	items map[string][]byte
+}
+
 func newFailingDeleteStore() *failingDeleteStore {
 	return &failingDeleteStore{items: make(map[string][]byte)}
 }
@@ -810,4 +817,3 @@ func TestLoginHidesSessionRotationFailure(t *testing.T) {
 		t.Errorf("expected a generic rotation error, got %q", rec.Body.String())
 	}
 }
-
