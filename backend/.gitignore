@@ -1,2 +1,7 @@
 dist
+# Keep ui/dist in the checkout. The prod build embeds this directory.
+# Track only the placeholder. Ignore all build output in this directory.
+!ui/dist/
+ui/dist/*
+!ui/dist/README
 main
