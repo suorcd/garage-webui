@@ -142,13 +142,13 @@ const KeysPage = () => {
             <Table.Body>
               {isLoading ? (
                 <tr>
-                  <td colSpan={5}>
+                  <td colSpan={6}>
                     <PageLoading />
                   </td>
                 </tr>
               ) : !items?.length ? (
                 <tr>
-                  <td colSpan={5} className="text-center py-16">
+                  <td colSpan={6} className="text-center py-16">
                     {search ? `No matches for "${search}"` : "No keys yet"}
                   </td>
                 </tr>
