@@ -6,10 +6,35 @@ type RequestBody = BodyInit | Record<string, unknown> | unknown[];
 type FetchOptions = Omit<RequestInit, "headers" | "body"> & {
   params?: Record<string, unknown>;
   headers?: Record<string, string>;
-  body?: RequestBody;
+  body?: RequestBody | null;
 };
 
 export const API_URL = BASE_PATH + "/api";
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    Object.prototype.toString.call(value) === "[object Object]"
+  );
+}
+
+function errorMessage(data: unknown, res: Response): string {
+  if (
+    isPlainObject(data) &&
+    typeof data.message === "string" &&
+    data.message !== ""
+  ) {
+    return data.message;
+  }
+  if (typeof data === "string" && data !== "") {
+    return data;
+  }
+  if (res.statusText !== "") {
+    return res.statusText;
+  }
+  return `HTTP ${res.status}`;
+}
 
 export class APIError extends Error {
   status!: number;
@@ -30,32 +55,56 @@ const api = {
 
     if (options?.params) {
       Object.entries(options.params).forEach(([key, value]) => {
+        if (value === undefined || value === null) {
+          return;
+        }
+        if (Array.isArray(value)) {
+          value.forEach((item) => {
+            if (item !== undefined && item !== null) {
+              _url.searchParams.append(key, String(item));
+            }
+          });
+          return;
+        }
         _url.searchParams.set(key, String(value));
       });
     }
 
-    let body = options?.body;
+    const {
+      params: _params,
+      body: rawBody,
+      headers: extraHeaders,
+      ...init
+    } = options ?? {};
+    void _params;
 
-    if (
-      typeof body === "object" &&
-      body !== null &&
-      !(body instanceof FormData)
-    ) {
-      body = JSON.stringify(body);
+    let body: BodyInit | null | undefined;
+    if (isPlainObject(rawBody) || Array.isArray(rawBody)) {
+      body = JSON.stringify(rawBody);
       headers["Content-Type"] = "application/json";
+    } else if (rawBody !== undefined) {
+      body = rawBody as BodyInit | null;
     }
 
     const res = await fetch(_url, {
-      ...options,
+      ...init,
       credentials: "include",
-      headers: { ...headers, ...(options?.headers || {}) },
-      body: body as BodyInit | undefined,
+      headers: { ...headers, ...(extraHeaders || {}) },
+      body,
     });
 
     const isJson = res.headers
       .get("Content-Type")
       ?.includes("application/json");
-    const data = isJson ? await res.json() : await res.text();
+    const text = await res.text();
+    let data: unknown = text;
+    if (isJson && text !== "") {
+      try {
+        data = JSON.parse(text);
+      } catch {
+        data = text;
+      }
+    }
 
     if (res.status === 401 && !url.startsWith("/auth")) {
       window.location.href = utils.url("/auth/login");
@@ -63,12 +112,7 @@ const api = {
     }
 
     if (!res.ok) {
-      const message = isJson
-        ? data?.message
-        : typeof data === "string"
-        ? data
-        : res.statusText;
-      throw new APIError(message, res.status);
+      throw new APIError(errorMessage(data, res), res.status);
     }
 
     return data as unknown as T;
