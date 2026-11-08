@@ -2,13 +2,14 @@ package router
 
 import (
 	"khairul169/garage-webui/middleware"
+	"khairul169/garage-webui/utils"
 	"net/http"
 )
 
 func HandleApiRouter() http.Handler {
 	mux := http.NewServeMux()
 
-	auth := &Auth{}
+	auth := &Auth{trustedProxies: parseTrustedProxies(utils.GetEnv("TRUSTED_PROXIES", ""))}
 	mux.HandleFunc("POST /auth/login", auth.Login)
 
 	router := http.NewServeMux()
