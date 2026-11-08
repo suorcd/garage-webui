@@ -38,6 +38,47 @@ func hasEndpointHost(endpoint string) bool {
 	return err == nil && u.Hostname() != ""
 }
 
+// validateBasePath checks that BASE_PATH starts with /. An empty value
+// means no base path. The value must already be trimmed.
+func validateBasePath(basePath string) error {
+	if basePath != "" && !strings.HasPrefix(basePath, "/") {
+		return errors.New("BASE_PATH must start with /")
+	}
+	return nil
+}
+
+// newMux builds the top-level mux for the BASE_PATH value. It trims a
+// trailing slash once, so /garage/ mounts the API at /garage/api. Health
+// endpoints live at the root, outside BASE_PATH and outside the auth and
+// CSRF middleware. A probe must reach them without a session. The CSRF
+// middleware passes GET requests through, but it wraps only the API
+// router, so it never sees these routes.
+func newMux(basePath string) (*http.ServeMux, error) {
+	basePath = strings.TrimRight(basePath, "/")
+	if err := validateBasePath(basePath); err != nil {
+		return nil, err
+	}
+
+	mux := http.NewServeMux()
+
+	mux.HandleFunc("GET /healthz", router.Healthz)
+	mux.HandleFunc("GET /readyz", router.Readyz)
+
+	// Serve API
+	apiPrefix := basePath + "/api"
+	mux.Handle(apiPrefix+"/", http.StripPrefix(apiPrefix, router.HandleApiRouter()))
+
+	// Static files
+	ui.ServeUI(mux)
+
+	// Redirect to UI if BASE_PATH is set
+	if basePath != "" {
+		mux.Handle("/", http.RedirectHandler(basePath, http.StatusMovedPermanently))
+	}
+
+	return mux, nil
+}
+
 func main() {
 	healthcheck := flag.Bool("healthcheck", false, "Check the /healthz endpoint and exit.")
 	flag.Parse()
@@ -79,25 +120,9 @@ func main() {
 	}
 
 	basePath := os.Getenv("BASE_PATH")
-	mux := http.NewServeMux()
-
-	// Health endpoints live at the root, outside BASE_PATH and outside
-	// the auth and CSRF middleware. A probe must reach them without a
-	// session. The CSRF middleware passes GET requests through, but it
-	// wraps only the API router, so it never sees these routes.
-	mux.HandleFunc("GET /healthz", router.Healthz)
-	mux.HandleFunc("GET /readyz", router.Readyz)
-
-	// Serve API
-	apiPrefix := basePath + "/api"
-	mux.Handle(apiPrefix+"/", http.StripPrefix(apiPrefix, router.HandleApiRouter()))
-
-	// Static files
-	ui.ServeUI(mux)
-
-	// Redirect to UI if BASE_PATH is set
-	if basePath != "" {
-		mux.Handle("/", http.RedirectHandler(basePath, http.StatusMovedPermanently))
+	mux, err := newMux(basePath)
+	if err != nil {
+		log.Fatal(err)
 	}
 
 	host := utils.GetEnv("HOST", "0.0.0.0")
