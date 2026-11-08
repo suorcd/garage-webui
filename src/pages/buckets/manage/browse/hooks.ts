@@ -32,7 +32,10 @@ export const useBrowseObjectsInfinite = (
     QueryKey,
     string | undefined
   >({
-    queryKey: ["browse", bucket, options, "pages"],
+    // The token captured at mount is part of the key, so a chain built from
+    // one page position never answers a mount that names another. Inside one
+    // mount the token is fixed, so pagination keeps one cache entry.
+    queryKey: ["browse", bucket, options, "pages", initialToken ?? ""],
     queryFn: ({ pageParam }) => {
       const params: UseBrowserObjectOptions = { ...options };
       if (pageParam) {

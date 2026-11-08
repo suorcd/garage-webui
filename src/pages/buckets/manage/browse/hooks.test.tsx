@@ -191,3 +191,37 @@ describe("useDeleteObject", () => {
     );
   });
 });
+
+describe("useBrowseObjectsInfinite cache identity", () => {
+
+  it("uses the token from the URL when the cache already holds another chain", async () => {
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false, staleTime: 30_000 } },
+    });
+    const chainWrapper = ({ children }: { children: ReactNode }) => (
+      <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+    );
+
+    // A previous mount cached the first page for this bucket and prefix.
+    apiGet.mockResolvedValueOnce(pageOne);
+    const first = renderHook(
+      () => useBrowseObjectsInfinite("bucket-b", { prefix: "", limit: 1000 }),
+      { wrapper: chainWrapper }
+    );
+    await waitFor(() => expect(first.result.current.isSuccess).toBe(true));
+    first.unmount();
+    apiGet.mockClear();
+
+    // A remount with a token in the URL must ask the backend for that page,
+    // not hand back the cached first page.
+    apiGet.mockResolvedValueOnce(pageTwo);
+    renderHook(
+      () => useBrowseObjectsInfinite("bucket-b", { prefix: "", limit: 1000 }, "token-9"),
+      { wrapper: chainWrapper }
+    );
+
+    await waitFor(() => expect(apiGet).toHaveBeenCalled());
+    expect(apiGet.mock.calls[0][1].params.next).toBe("token-9");
+  });
+
+});
