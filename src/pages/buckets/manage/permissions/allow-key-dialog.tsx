@@ -4,7 +4,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { Plus } from "lucide-react";
 import { useEffect } from "react";
 import { Checkbox, Modal, Table } from "react-daisyui";
-import { useFieldArray, useForm } from "react-hook-form";
+import { useFieldArray, useForm, useWatch } from "react-hook-form";
 import { AllowKeysSchema, allowKeysSchema } from "../schema";
 import { useDisclosure } from "@/hooks/useDisclosure";
 import { CheckboxField } from "@/components/ui/checkbox";
@@ -29,6 +29,7 @@ const AllowKeyDialog = ({ currentKeys }: Props) => {
     control: form.control,
     name: "keys",
   });
+  const watchedKeys = useWatch({ control: form.control, name: "keys" });
   const queryClient = useQueryClient();
 
   const allowKey = useAllowKey(bucket.id, {
@@ -42,6 +43,8 @@ const AllowKeyDialog = ({ currentKeys }: Props) => {
   });
 
   useEffect(() => {
+    if (!isOpen) return;
+
     const _keys = keys
       ?.filter((key) => !currentKeys?.includes(key.id))
       ?.map((key) => ({
@@ -53,8 +56,18 @@ const AllowKeyDialog = ({ currentKeys }: Props) => {
         owner: false,
       }));
 
+    // Only rebuild the rows when the unallowed key list changes. The
+    // parent passes a new currentKeys array on every render, and a blind
+    // reset here would wipe permissions the user already ticked.
+    const nextIds = _keys?.map((key) => key.keyId) ?? [];
+    const currentIds = form.getValues("keys")?.map((key) => key.keyId) ?? [];
+    const sameIds =
+      currentIds.length === nextIds.length &&
+      currentIds.every((id, index) => id === nextIds[index]);
+    if (sameIds) return;
+
     form.setValue("keys", _keys || []);
-  }, [keys, currentKeys]);
+  }, [keys, currentKeys, isOpen]);
 
   const onToggleAll = (
     e: React.ChangeEvent<HTMLInputElement>,
@@ -68,11 +81,15 @@ const AllowKeyDialog = ({ currentKeys }: Props) => {
     form.setValue("keys", newValues);
   };
 
+  const allChecked = (field: "checked" | "read" | "write" | "owner") =>
+    (watchedKeys?.length ?? 0) > 0 &&
+    watchedKeys.every((key) => key[field]);
+
   const onSubmit = form.handleSubmit((values) => {
     form.clearErrors("root");
 
     const data = values.keys
-      .filter((key) => key.read || key.write || key.owner)
+      .filter((key) => key.checked && (key.read || key.write || key.owner))
       .map((key) => ({
         keyId: key.keyId,
         permissions: { read: key.read, write: key.write, owner: key.owner },
@@ -110,6 +127,7 @@ const AllowKeyDialog = ({ currentKeys }: Props) => {
                   <Checkbox
                     color="primary"
                     size="sm"
+                    checked={allChecked("checked")}
                     onChange={(e) => onToggleAll(e, "checked")}
                   />
                   Key
@@ -119,6 +137,7 @@ const AllowKeyDialog = ({ currentKeys }: Props) => {
                   <Checkbox
                     color="primary"
                     size="sm"
+                    checked={allChecked("read")}
                     onChange={(e) => onToggleAll(e, "read")}
                   />
                   Read
@@ -127,6 +146,7 @@ const AllowKeyDialog = ({ currentKeys }: Props) => {
                   <Checkbox
                     color="primary"
                     size="sm"
+                    checked={allChecked("write")}
                     onChange={(e) => onToggleAll(e, "write")}
                   />
                   Write
@@ -135,6 +155,7 @@ const AllowKeyDialog = ({ currentKeys }: Props) => {
                   <Checkbox
                     color="primary"
                     size="sm"
+                    checked={allChecked("owner")}
                     onChange={(e) => onToggleAll(e, "owner")}
                   />
                   Owner

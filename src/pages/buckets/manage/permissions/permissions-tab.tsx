@@ -28,6 +28,11 @@ const PermissionsTab = () => {
     );
   }, [bucket?.keys]);
 
+  const currentKeys = useMemo(
+    () => keys?.map((key) => key.accessKeyId),
+    [keys]
+  );
+
   const onRemove = (id: string) => {
     if (window.confirm("Are you sure you want to remove this key?")) {
       denyKey.mutate({
@@ -42,7 +47,7 @@ const PermissionsTab = () => {
       <Card className="card-body">
         <div className="flex flex-row items-center gap-2">
           <Card.Title className="flex-1 truncate">Access Keys</Card.Title>
-          <AllowKeyDialog currentKeys={keys?.map((key) => key.accessKeyId)} />
+          <AllowKeyDialog currentKeys={currentKeys} />
         </div>
 
         <div className="overflow-x-auto">
