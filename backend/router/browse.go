@@ -678,6 +678,19 @@ func deleteDirectoryObjects(ctx context.Context, client *s3.Client, bucket, pref
 		}
 
 		if len(keys) > 0 {
+			// Trim the page to the remaining budget before deleting, so
+			// 10000 is a hard ceiling: a short page must not push the
+			// attempted count past it.
+			remaining := deleteObjectsMaxPerRequest - attempted
+			if remaining <= 0 {
+				result.Truncated = true
+				return result, nil
+			}
+			trimmed := false
+			if len(keys) > remaining {
+				keys = keys[:remaining]
+				trimmed = true
+			}
 			// Count attempted objects, not successful deletes: a prefix
 			// whose deletes all fail must still trip the cap.
 			attempted += len(keys)
@@ -696,6 +709,13 @@ func deleteDirectoryObjects(ctx context.Context, client *s3.Client, bucket, pref
 					Code:    aws.ToString(deleteErr.Code),
 					Message: aws.ToString(deleteErr.Message),
 				})
+			}
+
+			// A trimmed page leaves objects behind even when this was
+			// the last page the listing returns.
+			if trimmed {
+				result.Truncated = true
+				return result, nil
 			}
 		}
 

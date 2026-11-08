@@ -33,6 +33,7 @@ type fakeS3 struct {
 	lastToken        string
 	nilEntries       int
 	nilPrefixes      int
+	pageSize         int
 }
 
 type listBucketResult struct {
@@ -166,7 +167,10 @@ func (f *fakeS3) handleList(w http.ResponseWriter, r *http.Request) {
 	_, f.tokenPresent = r.URL.Query()["continuation-token"]
 	f.lastToken = r.URL.Query().Get("continuation-token")
 
-	const pageSize = 1000
+	pageSize := f.pageSize
+	if pageSize <= 0 {
+		pageSize = 1000
+	}
 	start := 0
 	if token := r.URL.Query().Get("continuation-token"); token != "" {
 		parsed, err := strconv.Atoi(token)
@@ -769,6 +773,102 @@ func TestDeleteDirectoryObjectsCapsAtTenThousand(t *testing.T) {
 	}
 	if !result.Truncated {
 		t.Error("expected truncated true when objects remain")
+	}
+	if fake.deleteCalls != 10 {
+		t.Errorf("expected 10 delete calls, got %d", fake.deleteCalls)
+	}
+}
+
+func TestDeleteDirectoryObjectsCapsAtTenThousandWithShortPages(t *testing.T) {
+	keys := make([]string, 20000)
+	for i := range keys {
+		keys[i] = fmt.Sprintf("dir/object-%05d", i)
+	}
+
+	fake := &fakeS3{keys: keys, pageSize: 900}
+	newFakeS3Server(t, fake)
+
+	req := httptest.NewRequest(http.MethodDelete, "/browse/test-bucket/dir/?recursive=true", nil)
+	rec := httptest.NewRecorder()
+	testBrowseMux().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	var result schema.DeleteObjectsResult
+	if err := json.Unmarshal(rec.Body.Bytes(), &result); err != nil {
+		t.Fatalf("cannot decode response: %v", err)
+	}
+	if result.Deleted != 10000 {
+		t.Errorf("expected 10000 deleted objects, got %d", result.Deleted)
+	}
+	if !result.Truncated {
+		t.Error("expected truncated true when objects remain")
+	}
+	if fake.deleteCalls != 12 {
+		t.Errorf("expected 12 delete calls, got %d", fake.deleteCalls)
+	}
+}
+
+func TestDeleteDirectoryObjectsDeletesExactlyTenThousand(t *testing.T) {
+	keys := make([]string, 10000)
+	for i := range keys {
+		keys[i] = fmt.Sprintf("dir/object-%05d", i)
+	}
+
+	fake := &fakeS3{keys: keys}
+	newFakeS3Server(t, fake)
+
+	req := httptest.NewRequest(http.MethodDelete, "/browse/test-bucket/dir/?recursive=true", nil)
+	rec := httptest.NewRecorder()
+	testBrowseMux().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	var result schema.DeleteObjectsResult
+	if err := json.Unmarshal(rec.Body.Bytes(), &result); err != nil {
+		t.Fatalf("cannot decode response: %v", err)
+	}
+	if result.Deleted != 10000 {
+		t.Errorf("expected 10000 deleted objects, got %d", result.Deleted)
+	}
+	if result.Truncated {
+		t.Error("expected truncated false when no objects remain")
+	}
+	if fake.deleteCalls != 10 {
+		t.Errorf("expected 10 delete calls, got %d", fake.deleteCalls)
+	}
+}
+
+func TestDeleteDirectoryObjectsDeletesNineThousandNineHundredNinetyNine(t *testing.T) {
+	keys := make([]string, 9999)
+	for i := range keys {
+		keys[i] = fmt.Sprintf("dir/object-%05d", i)
+	}
+
+	fake := &fakeS3{keys: keys}
+	newFakeS3Server(t, fake)
+
+	req := httptest.NewRequest(http.MethodDelete, "/browse/test-bucket/dir/?recursive=true", nil)
+	rec := httptest.NewRecorder()
+	testBrowseMux().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	var result schema.DeleteObjectsResult
+	if err := json.Unmarshal(rec.Body.Bytes(), &result); err != nil {
+		t.Fatalf("cannot decode response: %v", err)
+	}
+	if result.Deleted != 9999 {
+		t.Errorf("expected 9999 deleted objects, got %d", result.Deleted)
+	}
+	if result.Truncated {
+		t.Error("expected truncated false when no objects remain")
 	}
 	if fake.deleteCalls != 10 {
 		t.Errorf("expected 10 delete calls, got %d", fake.deleteCalls)

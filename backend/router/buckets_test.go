@@ -121,6 +121,9 @@ func TestGetAllBoundsConcurrency(t *testing.T) {
 	if max := fake.maxInFlight(); max > 8 {
 		t.Errorf("expected at most 8 concurrent bucket fetches, got %d", max)
 	}
+	if max := fake.maxInFlight(); max <= 1 {
+		t.Errorf("expected more than 1 concurrent bucket fetch, got %d", max)
+	}
 }
 
 func TestGetAllSurfacesPerBucketErrors(t *testing.T) {
