@@ -31,6 +31,39 @@ func TestGetAdminEndpointTrimsTrailingSlashes(t *testing.T) {
 	}
 }
 
+func TestGetAdminEndpointKeepsIPv6Host(t *testing.T) {
+	g := &garage{}
+	g.Config.RPCPublicAddr = "[::1]:3901"
+	g.Config.Admin.APIBindAddr = "[::1]:3903"
+
+	t.Setenv("API_BASE_URL", "")
+	if got := g.GetAdminEndpoint(); got != "http://[::1]:3903" {
+		t.Errorf("expected the IPv6 admin endpoint, got %q", got)
+	}
+}
+
+func TestGetS3EndpointKeepsIPv6Host(t *testing.T) {
+	g := &garage{}
+	g.Config.RPCPublicAddr = "[::1]:3901"
+	g.Config.S3API.APIBindAddr = "[::1]:3900"
+
+	t.Setenv("S3_ENDPOINT_URL", "")
+	if got := g.GetS3Endpoint(); got != "http://[::1]:3900" {
+		t.Errorf("expected the IPv6 S3 endpoint, got %q", got)
+	}
+}
+
+func TestGetAdminEndpointKeepsPlainHostname(t *testing.T) {
+	g := &garage{}
+	g.Config.RPCPublicAddr = "garage.example.com:3901"
+	g.Config.Admin.APIBindAddr = "127.0.0.1:3903"
+
+	t.Setenv("API_BASE_URL", "")
+	if got := g.GetAdminEndpoint(); got != "http://garage.example.com:3903" {
+		t.Errorf("expected the hostname admin endpoint, got %q", got)
+	}
+}
+
 func TestGetS3EndpointTrimsTrailingSlashes(t *testing.T) {
 	g := &garage{}
 
