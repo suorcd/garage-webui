@@ -2,10 +2,12 @@ import clsx, { type ClassValue } from "clsx";
 import { toast } from "sonner";
 import { twMerge } from "tailwind-merge";
 import dayjsRelativeTime from "dayjs/plugin/relativeTime";
+import dayjsUtc from "dayjs/plugin/utc";
 import dayjs from "dayjs";
 import { BASE_PATH } from "./consts";
 
 dayjs.extend(dayjsRelativeTime);
+dayjs.extend(dayjsUtc);
 export { dayjs };
 
 export const cn = (...args: ClassValue[]) => {
@@ -89,3 +91,8 @@ export const parseReturnTo = (value: string | null | undefined): string => {
   }
   return value;
 };
+
+// Garage returns expiration as a UTC timestamp. A local-zone format can show
+// the previous or next day, so the table shows the UTC date and names it.
+export const formatExpiryDate = (iso: string) =>
+  dayjs.utc(iso).format("YYYY-MM-DD") + " UTC";
