@@ -10,7 +10,7 @@ export type GetNodeInfoResult = {
       dbEngine:       string;
     };
   };
-  error:   Error;
+  error: Record<string, string>;
 }
 
 
@@ -28,9 +28,9 @@ export type GetStatusResult = {
 
 export type Node = {
   id: string;
-  role?: Role | StagedRole;
-  addr: string;
-  hostname: string;
+  role?: NodeAssignedRole | Role | StagedRole;
+  addr: string | null;
+  hostname: string | null;
   isUp: boolean;
   lastSeenSecsAgo: number | null;
   draining?: boolean;
@@ -47,6 +47,12 @@ export type Role = {
   id: string;
   zone: string;
   capacity: number;
+  tags: string[];
+};
+
+export type NodeAssignedRole = {
+  zone: string;
+  capacity: number | null;
   tags: string[];
 };
 

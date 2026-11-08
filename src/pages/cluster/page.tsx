@@ -1,12 +1,18 @@
 import Page from "@/context/page-context";
 import { useClusterStatus, useNodeInfo } from "./hooks";
-import { Card } from "react-daisyui";
+import { Alert, Card } from "react-daisyui";
 import NodesList from "./components/nodes-list";
 import { useMemo } from "react";
+import { CircleXIcon } from "lucide-react";
 
 const ClusterPage = () => {
   const { data } = useClusterStatus();
-  const { data: node } = useNodeInfo();
+  const {
+    data: nodeInfo,
+    isError: nodeInfoFailed,
+    error: nodeInfoError,
+  } = useNodeInfo();
+  const node = nodeInfo?.node;
 
   const nodes = useMemo(() => {
     if (!data) return [];
@@ -28,6 +34,14 @@ const ClusterPage = () => {
       <Card>
         <Card.Body className="gap-1">
           <Card.Title className="mb-2">Details</Card.Title>
+
+          {(nodeInfo?.error != null || nodeInfoFailed) && (
+            <Alert status="error" icon={<CircleXIcon />}>
+              <span>
+                Node info error: {nodeInfo?.error || nodeInfoError?.message}
+              </span>
+            </Alert>
+          )}
 
           {/* <DetailItem title="Node ID" value={node?.nodeId} /> */}
           <DetailItem title="Garage Version" value={node?.garageVersion} />

@@ -54,9 +54,9 @@ const NodesList = ({ nodes }: NodeListProps) => {
   });
 
   const applyChanges = useApplyChanges({
-    onSuccess: () => {
+    onSuccess: (result) => {
       toast.success("Layout applied!");
-      setTimeout(refetch, 100);
+      queryClient.setQueryData(["layout"], result.layout);
       queryClient.invalidateQueries({ queryKey: ["status"] });
     },
     onError: handleError,
@@ -68,9 +68,9 @@ const NodesList = ({ nodes }: NodeListProps) => {
         if (filter.search) {
           const q = filter.search.toLowerCase();
           return (
-            item.hostname.toLowerCase().includes(q) ||
+            (item.hostname || "").toLowerCase().includes(q) ||
             item.id.includes(q) ||
-            item.addr.includes(q) ||
+            (item.addr || "").includes(q) ||
             item.role?.zone?.includes(q) ||
             item.role?.tags?.find((tag) => tag.toLowerCase().includes(q))
           );
@@ -79,14 +79,18 @@ const NodesList = ({ nodes }: NodeListProps) => {
         return true;
       })
       .map((item) => {
-        const role = data?.roles?.find((r) => r.id === item.role?.id);
+        const committedRole = data?.roles?.find((r) => r.id === item.id);
         const stagedChanges = data?.stagedRoleChanges?.find(
           (i) => i.id === item.id
         );
+        const isRemoval = stagedChanges?.remove === true;
         return {
           ...item,
-          role: stagedChanges || role || item.role,
+          role: isRemoval
+            ? committedRole || item.role
+            : stagedChanges || committedRole || item.role,
           isStaged: !!stagedChanges,
+          isRemoval,
         };
       });
   }, [nodes, data, filter]);
@@ -107,11 +111,8 @@ const NodesList = ({ nodes }: NodeListProps) => {
   };
 
   const onRevert = () => {
-    if (
-      window.confirm("Are you sure you want to revert any changes made?") &&
-      data?.version != null
-    ) {
-      revertChanges.mutate(data?.version + 1);
+    if (window.confirm("Are you sure you want to revert any changes made?")) {
+      revertChanges.mutate();
     }
   };
 
@@ -202,7 +203,7 @@ const NodesList = ({ nodes }: NodeListProps) => {
                 key={item.id}
                 className={cn(
                   item.isStaged && "bg-warning/10",
-                  item.role && "remove" in item.role ? "bg-error/10" : null
+                  item.isRemoval ? "bg-error/10" : null
                 )}
               >
                 <span>{idx + 1}</span>
@@ -244,11 +245,15 @@ const NodesList = ({ nodes }: NodeListProps) => {
 
                       <p className="text-xs text-base-content/80">
                         {readableBytes(item.dataPartition?.available) +
-                          ` (${Math.round(
-                            (item.dataPartition.available /
-                              item.dataPartition.total) *
-                            100
-                          )}%)`}
+                          ` (${
+                            item.dataPartition.total > 0
+                              ? Math.round(
+                                  (item.dataPartition.available /
+                                    item.dataPartition.total) *
+                                    100
+                                )
+                              : 0
+                          }%)`}
                       </p>
                     </div>
                   ) : null}

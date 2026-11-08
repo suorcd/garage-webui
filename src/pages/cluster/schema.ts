@@ -6,7 +6,17 @@ export const connectNodeSchema = z.object({
 
 export type ConnectNodeSchema = z.infer<typeof connectNodeSchema>;
 
-export const capacityUnits = ["MB", "GB", "TB"] as const;
+export const capacityUnits = ["B", "MB", "GB", "TB"] as const;
+
+// Bytes per capacity unit. The "B" entry keeps sub-1 MB capacities exact:
+// without it, parseCapacity returns no unit below 1 MB and the form can
+// stage 1500 bytes as 1500 MB when the user picks a unit to repair it.
+const capacityUnitBytes: Record<(typeof capacityUnits)[number], number> = {
+  B: 1,
+  MB: 1000 ** 2,
+  GB: 1000 ** 3,
+  TB: 1000 ** 4,
+};
 
 export const assignNodeSchema = z
   .object({
@@ -32,7 +42,7 @@ export const calculateCapacity = (
   unit?: (typeof capacityUnits)[number]
 ) => {
   if (!value || !unit) return 0;
-  return value * 1000 ** (capacityUnits.indexOf(unit) + 2);
+  return value * capacityUnitBytes[unit];
 };
 
 export const parseCapacity = (value?: number | null) => {
@@ -41,11 +51,12 @@ export const parseCapacity = (value?: number | null) => {
   }
 
   for (let i = capacityUnits.length - 1; i >= 0; i--) {
-    if (value >= 1000 ** (i + 2)) {
-      const unitValue = value / 1000 ** (i + 2);
+    const unit = capacityUnits[i];
+    if (value >= capacityUnitBytes[unit]) {
+      const unitValue = value / capacityUnitBytes[unit];
       return {
         value: Number(unitValue.toFixed(3)),
-        unit: capacityUnits[i],
+        unit,
       };
     }
   }

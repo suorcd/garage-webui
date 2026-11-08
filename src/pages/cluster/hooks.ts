@@ -24,7 +24,12 @@ export const useNodeInfo = () => {
       api.get<GetNodeInfoResult>("/v2/GetNodeInfo", {
         params: { node: "self" },
       }),
-    select: (data) => Object.values(data?.success || {})?.[0],
+    select: (data) => ({
+      // GetNodeInfo keys success and error by the node hex id, even when
+      // the query asks for node=self, so take the first entry of each map.
+      node: Object.values(data?.success || {})[0],
+      error: Object.values(data?.error || {})[0],
+    }),
   });
 };
 
@@ -87,9 +92,9 @@ export const useUnassignNode = (
 };
 
 export const useRevertChanges = (
-  options?: Partial<UseMutationOptions<unknown, Error, number>>
+  options?: Partial<UseMutationOptions<unknown, Error, void>>
 ) => {
-  return useMutation<unknown, Error, number>({
+  return useMutation<unknown, Error, void>({
     mutationFn: () => api.post<unknown>("/v2/RevertClusterLayout"),
     ...options,
   });
