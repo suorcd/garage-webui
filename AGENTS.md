@@ -19,11 +19,12 @@ Go backend, and produces one `garage-webui` binary. `README.md` calls the flake 
 setup, and it is: the flake supplies Go, Node.js, pnpm, Air, and Garage.
 
 `docker-compose.yml` is not a development runner. It starts the published
-`khairul169/garage-webui:latest` image with a Garage node, for a trial run. It has no
+`ghcr.io/suorcd/garage-webui:latest` image with a Garage node, for a trial run. It has no
 `build:` section. Do not use it to test a change.
 
 The repository is a fork of `khairul169/garage-webui`, maintained by `suorcd`. Keep the
-upstream identity in the module path, the image name, and the license.
+upstream identity in the module path and the license. The image name is
+`ghcr.io/suorcd/garage-webui`.
 
 `README.md` holds the feature list and the documented configuration. Do not re-open a
 decision that `README.md` records without new user input.
@@ -96,8 +97,9 @@ Backend:
   `config.go`. Change one of these with the frontend type in the same change.
 - `backend/middleware/`, `backend/utils/` - cross-cutting helpers. `utils/garage.go` holds
   the Garage client and the admin token.
-- `backend/ui/` - the embedded frontend. `ui.go` serves the files in development,
-  `ui_prod.go` serves the embedded build, and `pnpm build` or the flake fills it.
+- `backend/ui/` - the embedded frontend. `ui.go` is an empty stub in development, and
+  Vite serves the UI on port 5173. `ui_prod.go` serves the embedded build, and `pnpm
+  build` or the flake fills it.
 - `backend/Makefile`, `backend/.air.toml` - the Go targets and the Air live-reload
   configuration.
 
@@ -193,9 +195,10 @@ nix build -L
 
 ### Test harness status
 
-- The backend has tests: `backend/router/browse_test.go`. Add a new Go test as
-  `<file>_test.go` in the package that holds the code, and call the handler through the
-  router with a real request.
+- The backend has 12 Go test files: `backend/main_test.go`, `backend/router/*_test.go`,
+  and `backend/utils/garage_test.go`. The frontend has 13 vitest files under `src/`. Add
+  a new Go test as `<file>_test.go` in the package that holds the code, and call the
+  handler through the router with a real request.
 - The frontend uses `vitest` with `jsdom` and Testing Library. Run `pnpm test`. Add a test
   as `*.test.tsx` next to the component. Render the component and act on it as a user does.
 
