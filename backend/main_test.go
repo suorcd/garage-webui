@@ -5,6 +5,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
@@ -140,4 +141,37 @@ func TestNewHTTPServerClosesHeaderlessConnection(t *testing.T) {
 	}
 	// Any other error (for example, a reset on a loaded runner) still
 	// shows that the server closed the connection.
+}
+
+func TestRunHealthcheckReturnsZeroOnOK(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/healthz" {
+			t.Errorf("expected a /healthz request, got %s", r.URL.Path)
+		}
+		w.Write([]byte(`{"status":"ok"}`))
+	}))
+	t.Cleanup(server.Close)
+
+	addr := strings.TrimPrefix(server.URL, "http://")
+	if got := runHealthcheck(addr); got != 0 {
+		t.Errorf("expected exit 0 on a 200 response, got %d", got)
+	}
+}
+
+func TestRunHealthcheckReturnsNonZeroOnFailure(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusServiceUnavailable)
+	}))
+	t.Cleanup(server.Close)
+
+	addr := strings.TrimPrefix(server.URL, "http://")
+	if got := runHealthcheck(addr); got == 0 {
+		t.Error("expected a non-zero exit on a 503 response")
+	}
+}
+
+func TestRunHealthcheckReturnsNonZeroWhenUnreachable(t *testing.T) {
+	if got := runHealthcheck("127.0.0.1:1"); got == 0 {
+		t.Error("expected a non-zero exit when the server is unreachable")
+	}
 }

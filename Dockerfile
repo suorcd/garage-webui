@@ -26,13 +26,12 @@ RUN make
 FROM scratch
 
 COPY --from=alpine:3.24@sha256:3f4d6b32e26703c6082839234f43769d5046b3ac7c910033911d1e71d8cd630a /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
-COPY --from=ghcr.io/tarampampam/curl:8.6.0 /bin/curl /bin/curl
 COPY --from=backend /app/main /bin/main
 COPY --from=backend /etc/passwd /etc/passwd
 COPY --from=backend /etc/group /etc/group
 
 HEALTHCHECK --interval=5m --timeout=2s --retries=3 --start-period=15s CMD [ \
-    "curl", "--fail", "http://127.0.0.1:3909" \
+    "/bin/main", "-healthcheck" \
 ]
 
 USER 10001:10001

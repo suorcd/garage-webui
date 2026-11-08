@@ -2,6 +2,7 @@ package main
 
 import (
 	"errors"
+	"flag"
 	"fmt"
 	"khairul169/garage-webui/router"
 	"khairul169/garage-webui/ui"
@@ -38,6 +39,12 @@ func hasEndpointHost(endpoint string) bool {
 }
 
 func main() {
+	healthcheck := flag.Bool("healthcheck", false, "Check the /healthz endpoint and exit.")
+	flag.Parse()
+	if *healthcheck {
+		os.Exit(runHealthcheck("127.0.0.1:" + utils.GetEnv("PORT", "3909")))
+	}
+
 	// Initialize app
 	godotenv.Load()
 	utils.InitCacheManager()
@@ -74,6 +81,13 @@ func main() {
 	basePath := os.Getenv("BASE_PATH")
 	mux := http.NewServeMux()
 
+	// Health endpoints live at the root, outside BASE_PATH and outside
+	// the auth and CSRF middleware. A probe must reach them without a
+	// session. The CSRF middleware passes GET requests through, but it
+	// wraps only the API router, so it never sees these routes.
+	mux.HandleFunc("GET /healthz", router.Healthz)
+	mux.HandleFunc("GET /readyz", router.Readyz)
+
 	// Serve API
 	apiPrefix := basePath + "/api"
 	mux.Handle(apiPrefix+"/", http.StripPrefix(apiPrefix, router.HandleApiRouter()))
@@ -95,6 +109,23 @@ func main() {
 	if err := newHTTPServer(addr, sessionMgr.LoadAndSave(mux)).ListenAndServe(); err != nil {
 		log.Fatal(err)
 	}
+}
+
+// runHealthcheck GETs /healthz and returns the exit code for the Docker
+// HEALTHCHECK. Zero means the process answers. Any other value means it
+// does not. The client timeout stays at 2 seconds: /healthz never
+// contacts Garage, so a healthy process answers at once.
+func runHealthcheck(addr string) int {
+	client := &http.Client{Timeout: 2 * time.Second}
+	res, err := client.Get("http://" + addr + "/healthz")
+	if err != nil {
+		return 1
+	}
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusOK {
+		return 1
+	}
+	return 0
 }
 
 // readHeaderTimeout and idleTimeout bound how long the server waits for
