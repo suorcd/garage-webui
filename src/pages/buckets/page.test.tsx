@@ -1,4 +1,5 @@
 import { cleanup, render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -8,7 +9,7 @@ const { bucketsData } = vi.hoisted(() => ({
   bucketsData: [
     {
       id: "a-aliased",
-      globalAliases: ["zebra"],
+      globalAliases: ["Zebra"],
       localAliases: [],
       websiteAccess: false,
       keys: [],
@@ -75,6 +76,26 @@ describe("BucketsPage", () => {
 
     expect(screen.getByText("1.5 KB")).toBeTruthy();
     expect(screen.getByText("2.5 MB")).toBeTruthy();
+  });
+
+  it("matches an alias regardless of case", async () => {
+    const user = userEvent.setup();
+    renderPage();
+
+    await user.type(screen.getByPlaceholderText("Search..."), "zebra");
+
+    expect(screen.getByText("2.5 MB")).toBeTruthy();
+    expect(screen.queryByText("1.5 KB")).toBeNull();
+  });
+
+  it("matches an alias when the query has uppercase letters", async () => {
+    const user = userEvent.setup();
+    renderPage();
+
+    await user.type(screen.getByPlaceholderText("Search..."), "ZEBRA");
+
+    expect(screen.getByText("2.5 MB")).toBeTruthy();
+    expect(screen.queryByText("1.5 KB")).toBeNull();
   });
 
   it("sorts by bucket id when a bucket has no alias", () => {
