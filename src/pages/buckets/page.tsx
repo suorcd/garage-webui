@@ -48,6 +48,7 @@ const BucketsPage = () => {
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
           <Input
             placeholder="Search..."
+            aria-label="Search buckets"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />

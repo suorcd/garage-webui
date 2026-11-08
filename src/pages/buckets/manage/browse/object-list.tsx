@@ -127,34 +127,45 @@ const ObjectList = ({ prefix, onPrefixChange }: Props) => {
             </tr>
           ) : null}
 
-          {prefixes.map((prefix, idx) => (
-            <tr
-              key={prefix}
-              className="hover:bg-neutral/60 hover:text-neutral-content group"
-            >
-              <td
-                className="cursor-pointer"
-                role="button"
-                onClick={() => onPrefixChange?.(prefix)}
+          {prefixes.map((prefix, idx) => {
+            const folderName = prefix
+              .substring(0, prefix.lastIndexOf("/"))
+              .split("/")
+              .pop();
+            return (
+              <tr
+                key={prefix}
+                className="hover:bg-neutral/60 hover:text-neutral-content group"
               >
-                <span className="flex items-center gap-2 font-normal">
-                  <Folder size={20} className="text-primary" />
-                  {prefix
-                    .substring(0, prefix.lastIndexOf("/"))
-                    .split("/")
-                    .pop()}
-                </span>
-              </td>
-              <td colSpan={2} />
-              <ObjectActions
-                object={{ objectKey: prefix, url: "" }}
-                end={
-                  idx >= prefixes.length + objects.length - 2 &&
-                  prefixes.length + objects.length > 5
-                }
-              />
-            </tr>
-          ))}
+                <td
+                  className="cursor-pointer"
+                  role="button"
+                  tabIndex={0}
+                  aria-label={`Open folder ${folderName}`}
+                  onClick={() => onPrefixChange?.(prefix)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      onPrefixChange?.(prefix);
+                    }
+                  }}
+                >
+                  <span className="flex items-center gap-2 font-normal">
+                    <Folder size={20} className="text-primary" />
+                    {folderName}
+                  </span>
+                </td>
+                <td colSpan={2} />
+                <ObjectActions
+                  object={{ objectKey: prefix, url: "" }}
+                  end={
+                    idx >= prefixes.length + objects.length - 2 &&
+                    prefixes.length + objects.length > 5
+                  }
+                />
+              </tr>
+            );
+          })}
 
           {objects.map((object, idx) => {
             const extIdx = object.objectKey.lastIndexOf(".");
@@ -172,7 +183,15 @@ const ObjectList = ({ prefix, onPrefixChange }: Props) => {
                 <td
                   className="cursor-pointer"
                   role="button"
+                  tabIndex={0}
+                  aria-label={`Open ${object.objectKey}`}
                   onClick={() => onObjectClick(object)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      onObjectClick(object);
+                    }
+                  }}
                 >
                   <span className="flex items-center font-normal w-full">
                     <FilePreview ext={ext?.substring(1)} object={object} />

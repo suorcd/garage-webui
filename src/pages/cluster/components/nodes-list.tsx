@@ -132,6 +132,7 @@ const NodesList = ({ nodes }: NodeListProps) => {
       <div className="flex flex-col sm:flex-row items-stretch sm:items-center my-2 gap-x-4 gap-y-2">
         <Input
           placeholder="Search..."
+          aria-label="Search nodes"
           value={filter.search}
           onChange={(e) => {
             setFilter((state) => ({ ...state, search: e.target.value }));

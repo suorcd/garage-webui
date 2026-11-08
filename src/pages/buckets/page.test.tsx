@@ -164,4 +164,10 @@ describe("BucketsPage", () => {
 
     expect(screen.getByText('No matches for "zzz"')).toBeTruthy();
   });
+
+  it("labels the search input", () => {
+    renderPage();
+
+    expect(screen.getByLabelText("Search buckets")).toBeTruthy();
+  });
 });

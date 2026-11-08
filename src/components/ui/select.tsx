@@ -19,10 +19,17 @@ const Select = forwardRef<unknown, Props>(({ creatable, ...props }, ref) => {
         control: (p) =>
           cn(
             "bg-base-100 px-4 rounded-btn border text-base-content border-base-content/20 h-12",
+            p.isFocused && "ring-2 ring-primary border-primary",
             p.isMulti && "py-2 flex flex-row gap-2 items-center flex-wrap",
             p.isMulti && p.hasValue ? "pt-1 px-2 h-auto" : null
           ),
         input: () => "text-base-content",
+        placeholder: () => "text-base-content/60",
+        dropdownIndicator: () =>
+          "text-base-content/60 hover:text-base-content px-2",
+        clearIndicator: () =>
+          "text-base-content/60 hover:text-base-content px-2",
+        menu: () => "z-50 shadow-lg",
         menuList: () =>
           "bg-base-100 rounded-btn border border-base-content/20 p-0",
         noOptionsMessage: () => "my-4",
@@ -40,6 +47,8 @@ const Select = forwardRef<unknown, Props>(({ creatable, ...props }, ref) => {
       noOptionsMessage={() =>
         creatable ? "Type something to add..." : undefined
       }
+      menuPortalTarget={document.body}
+      menuPosition="fixed"
       {...props}
     />
   );

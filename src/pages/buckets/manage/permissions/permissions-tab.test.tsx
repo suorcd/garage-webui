@@ -127,4 +127,15 @@ describe("PermissionsTab", () => {
       errors.some((msg) => /without an `onChange` handler/.test(msg))
     ).toBe(false);
   });
+
+  it("names the remove button for each key", () => {
+    renderTab();
+
+    expect(
+      screen.getByRole("button", { name: "Remove key key one" })
+    ).toBeTruthy();
+    expect(
+      screen.getByRole("button", { name: "Remove key key two" })
+    ).toBeTruthy();
+  });
 });

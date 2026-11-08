@@ -86,6 +86,7 @@ const Header = ({ onSidebarOpen }: HeaderProps) => {
             color="ghost"
             shape="circle"
             className="-mx-2"
+            aria-label="Back"
           >
             <ArrowLeft />
           </Button>
@@ -96,6 +97,7 @@ const Header = ({ onSidebarOpen }: HeaderProps) => {
           color="ghost"
           className="md:hidden -mx-2"
           onClick={onSidebarOpen}
+          aria-label="Open sidebar"
         />
 
         <h1 className="text-xl flex-1 truncate">{page?.title ?? ""}</h1>

@@ -131,4 +131,19 @@ describe("LoginPage", () => {
     ).toBe(false);
     expect(screen.queryByText("home content")).toBeNull();
   });
+
+  it("sets autocomplete on the login fields", () => {
+    renderLogin(["/auth/login"]);
+
+    expect(
+      screen
+        .getByPlaceholderText("Enter your username")
+        .getAttribute("autoComplete"),
+    ).toBe("username");
+    expect(
+      screen
+        .getByPlaceholderText("Enter your password")
+        .getAttribute("autoComplete"),
+    ).toBe("current-password");
+  });
 });

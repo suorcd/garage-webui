@@ -15,7 +15,13 @@ const App = () => {
       <QueryClientProvider client={queryClient}>
         <Router />
       </QueryClientProvider>
-      <Toaster richColors />
+      <Toaster
+        richColors
+        position="top-right"
+        duration={4000}
+        closeButton
+        visibleToasts={5}
+      />
       <ThemeProvider />
     </PageContextProvider>
   );

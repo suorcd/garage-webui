@@ -262,4 +262,11 @@ describe("NodesList", () => {
 
     expect(screen.getByText('No matches for "zzz"')).toBeTruthy();
   });
+
+  it("labels the search input", async () => {
+    renderList(newClient());
+    await waitFor(() => expect(screen.getByText("node-a")).toBeTruthy());
+
+    expect(screen.getByLabelText("Search nodes")).toBeTruthy();
+  });
 });

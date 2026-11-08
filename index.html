@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en" data-theme="pastel">
+<html lang="en" data-theme="suorcd">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -12,6 +12,35 @@
     <title>Garage Web UI</title>
     <script>
       window.__BASE_PATH = "%BASE_PATH%";
+    </script>
+    <script>
+      // Apply the persisted theme before first paint, so the page never
+      // flashes the default theme. Keep the list in sync with
+      // src/app/themes.ts.
+      var __theme = "suorcd";
+      try {
+        var __stored = JSON.parse(
+          localStorage.getItem("appdata") || "null",
+        );
+        var __saved = __stored && __stored.state && __stored.state.theme;
+        var __themes = [
+          "suorcd",
+          "pastel",
+          "dark",
+          "dracula",
+          "cupcake",
+          "dim",
+          "night",
+          "nord",
+          "corporate",
+          "valentine",
+          "winter",
+        ];
+        if (__themes.indexOf(__saved) !== -1) {
+          __theme = __saved;
+        }
+      } catch (e) {}
+      document.documentElement.setAttribute("data-theme", __theme);
     </script>
   </head>
   <body>

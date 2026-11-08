@@ -211,6 +211,16 @@ describe("MainLayout", () => {
     expect(toggle.checked).toBe(false);
   });
 
+  it("names the back and sidebar buttons", () => {
+    renderLayout(["/", "/buckets/abc"], 1);
+
+    const header = screen.getByRole("banner");
+    expect(within(header).getByRole("button", { name: "Back" })).toBeTruthy();
+    expect(
+      within(header).getByRole("button", { name: "Open sidebar" })
+    ).toBeTruthy();
+  });
+
   it("keeps the sidebar open when the layout re-renders", async () => {
     const user = userEvent.setup();
     const { rerender } = renderLayout(["/"], 0);

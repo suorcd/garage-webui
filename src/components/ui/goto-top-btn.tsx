@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import Button from "./button";
 import { ArrowUp } from "lucide-react";
-import { cn } from "@/lib/utils";
 
 const GotoTopButton = () => {
   const mainElRef = useRef<HTMLElement | null>(null);
@@ -32,13 +31,14 @@ const GotoTopButton = () => {
     mainEl.scrollTo({ top: 0, behavior: "smooth" });
   };
 
+  if (!show) {
+    return null;
+  }
+
   return (
     <Button
       icon={ArrowUp}
-      className={cn(
-        "fixed bottom-4 right-4 invisible opacity-0 transition-opacity",
-        show && "visible opacity-100"
-      )}
+      className="fixed bottom-4 right-4 transition-opacity"
       onClick={onClick}
     >
       Top

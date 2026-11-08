@@ -61,4 +61,21 @@ describe("KeysPage", () => {
     expect(screen.getByText("MyKey")).toBeTruthy();
     expect(screen.queryByText("other-key")).toBeNull();
   });
+
+  it("labels the search input", () => {
+    renderPage();
+
+    expect(screen.getByLabelText("Search keys")).toBeTruthy();
+  });
+
+  it("names the copy and remove buttons", () => {
+    renderPage();
+
+    expect(
+      screen.getAllByRole("button", { name: "Copy key ID" })
+    ).toHaveLength(2);
+    expect(
+      screen.getByRole("button", { name: "Remove key MyKey" })
+    ).toBeTruthy();
+  });
 });

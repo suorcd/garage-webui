@@ -39,17 +39,19 @@ export const ToggleField = <T extends FieldValues>({
     <FormControl
       form={form}
       name={name}
-      title={title}
       className={className}
       render={(field) => (
-        <Toggle
-          {...props}
-          {...field}
-          className={inputClassName}
-          color={field.value ? "primary" : undefined}
-          checked={field.value || false}
-          onChange={(e) => field.onChange(e.target.checked)}
-        />
+        <>
+          {title ? <span className="label label-text">{title}</span> : null}
+          <Toggle
+            {...props}
+            {...field}
+            className={inputClassName}
+            color={field.value ? "primary" : undefined}
+            checked={field.value || false}
+            onChange={(e) => field.onChange(e.target.checked)}
+          />
+        </>
       )}
     />
   );

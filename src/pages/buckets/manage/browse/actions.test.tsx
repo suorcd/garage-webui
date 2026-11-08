@@ -233,4 +233,15 @@ describe("Actions", () => {
       (screen.getByRole("dialog") as HTMLDialogElement).open
     ).toBe(true);
   });
+
+  it("names the upload and create-folder buttons", () => {
+    renderActions(true);
+
+    expect(
+      screen.getByRole("button", { name: "Upload file" })
+    ).toBeTruthy();
+    expect(
+      screen.getByRole("button", { name: "Create folder" })
+    ).toBeTruthy();
+  });
 });
