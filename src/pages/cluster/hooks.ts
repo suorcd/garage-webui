@@ -24,6 +24,8 @@ export const useNodeInfo = () => {
       api.get<GetNodeInfoResult>("/v2/GetNodeInfo", {
         params: { node: "self" },
       }),
+    // The node version does not change, so this query stays static.
+    staleTime: Infinity,
     select: (data) => ({
       // GetNodeInfo keys success and error by the node hex id, even when
       // the query asks for node=self, so take the first entry of each map.
@@ -37,6 +39,7 @@ export const useClusterStatus = () => {
   return useQuery({
     queryKey: ["status"],
     queryFn: () => api.get<GetStatusResult>("/v2/GetClusterStatus"),
+    refetchInterval: 30_000,
   });
 };
 
@@ -44,6 +47,7 @@ export const useClusterLayout = () => {
   return useQuery({
     queryKey: ["layout"],
     queryFn: () => api.get<GetClusterLayoutResult>("/v2/GetClusterLayout"),
+    refetchInterval: 30_000,
   });
 };
 

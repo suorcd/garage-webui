@@ -6,5 +6,6 @@ export const useNodesHealth = () => {
   return useQuery({
     queryKey: ["health"],
     queryFn: () => api.get<GetHealthResult>("/v2/GetClusterHealth"),
+    refetchInterval: 30_000,
   });
 };
