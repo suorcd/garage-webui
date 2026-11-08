@@ -300,4 +300,27 @@ describe("api 401 redirect", () => {
     expect(error.status).toBe(401);
     expect(redirects).toEqual([]);
   });
+
+});
+
+describe("api body read deadline", () => {
+  it("surfaces a deadline that fires while the body is read", async () => {
+    const stalled = {
+      status: 200,
+      statusText: "OK",
+      headers: new Headers({ "Content-Type": "application/json" }),
+      text: () =>
+        Promise.reject(
+          Object.assign(new Error("body stalled"), { name: "TimeoutError" }),
+        ),
+      clone: () => stalled,
+    } as unknown as Response;
+    stubFetch(stalled);
+
+    const error = await apiError(api.get("/browse/bucket"));
+
+    expect(error).toBeInstanceOf(APIError);
+    expect(error.status).toBe(408);
+    expect(error.message).toBe("Request timed out");
+  });
 });
