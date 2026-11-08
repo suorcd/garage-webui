@@ -63,38 +63,57 @@ const PermissionsTab = () => {
             </Table.Head>
 
             <Table.Body>
-              {keys?.map((key, idx) => (
-                <Table.Row>
-                  <span>{idx + 1}</span>
-                  <span>{key.name || key.accessKeyId?.substring(0, 8)}</span>
-                  <span>{key.bucketLocalAliases?.join(", ") || "-"}</span>
-                  <span>
-                    <Checkbox
-                      checked={key.permissions?.read}
-                      color="primary"
-                      className="cursor-default"
-                    />
-                  </span>
-                  <span>
-                    <Checkbox
-                      checked={key.permissions?.write}
-                      color="primary"
-                      className="cursor-default"
-                    />
-                  </span>
-                  <span>
-                    <Checkbox
-                      checked={key.permissions?.owner}
-                      color="primary"
-                      className="cursor-default"
-                    />
-                  </span>
-                  <Button
-                    icon={Trash}
-                    onClick={() => onRemove(key.accessKeyId)}
-                  />
-                </Table.Row>
-              ))}
+              {keys && keys.length > 0 ? (
+                keys.map((key, idx) => {
+                  const label =
+                    key.name || key.accessKeyId?.substring(0, 8);
+                  return (
+                    <Table.Row key={key.accessKeyId}>
+                      <span>{idx + 1}</span>
+                      <span>{label}</span>
+                      <span>{key.bucketLocalAliases?.join(", ") || "-"}</span>
+                      <span>
+                        <Checkbox
+                          checked={key.permissions?.read}
+                          readOnly
+                          disabled
+                          aria-label={`Read permission for ${label}`}
+                          color="primary"
+                          className="cursor-default"
+                        />
+                      </span>
+                      <span>
+                        <Checkbox
+                          checked={key.permissions?.write}
+                          readOnly
+                          disabled
+                          aria-label={`Write permission for ${label}`}
+                          color="primary"
+                          className="cursor-default"
+                        />
+                      </span>
+                      <span>
+                        <Checkbox
+                          checked={key.permissions?.owner}
+                          readOnly
+                          disabled
+                          aria-label={`Owner permission for ${label}`}
+                          color="primary"
+                          className="cursor-default"
+                        />
+                      </span>
+                      <Button
+                        icon={Trash}
+                        onClick={() => onRemove(key.accessKeyId)}
+                      />
+                    </Table.Row>
+                  );
+                })
+              ) : (
+                <tr>
+                  <td colSpan={7}>No keys allowed yet</td>
+                </tr>
+              )}
             </Table.Body>
           </Table>
         </div>
