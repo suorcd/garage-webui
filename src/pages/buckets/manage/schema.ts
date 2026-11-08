@@ -17,8 +17,20 @@ export type WebsiteConfigSchema = z.infer<typeof websiteConfigSchema>;
 
 export const quotaSchema = z.object({
   enabled: z.boolean(),
-  maxObjects: z.coerce.number().nullish(),
-  maxSize: z.coerce.number().nullish(),
+  // An empty field means no quota, so read it as null before the number
+  // check. A zero or negative value is not a quota: it is an error.
+  maxObjects: z.preprocess(
+    (value) => (value === "" ? null : value),
+    z.coerce
+      .number()
+      .int("Max objects must be a whole number")
+      .positive("Max objects must be greater than 0")
+      .nullish()
+  ),
+  maxSize: z.preprocess(
+    (value) => (value === "" ? null : value),
+    z.coerce.number().positive("Max size must be greater than 0").nullish()
+  ),
 });
 
 export type QuotaSchema = z.infer<typeof quotaSchema>;
