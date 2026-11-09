@@ -36,10 +36,17 @@ vi.mock("sonner", () => ({
 
 import KeysPage from "./page";
 
-function renderPage() {
+function renderPage(readOnly = false) {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   });
+  if (readOnly) {
+    queryClient.setQueryData(["auth"], {
+      enabled: true,
+      authenticated: true,
+      role: "readonly",
+    });
+  }
   return render(
     <QueryClientProvider client={queryClient}>
       <PageContextProvider>
@@ -123,5 +130,24 @@ describe("KeysPage", () => {
 
     expect(first.disabled).toBe(true);
     expect(second.disabled).toBe(false);
+  });
+
+  it("disables key mutations for a read-only viewer", () => {
+    renderPage(true);
+
+    expect(
+      (
+        screen.getByRole("checkbox", {
+          name: "Allow key MyKey to create buckets",
+        }) as HTMLInputElement
+      ).disabled
+    ).toBe(true);
+    expect(
+      (
+        screen.getByRole("button", {
+          name: "Remove key MyKey",
+        }) as HTMLButtonElement
+      ).disabled
+    ).toBe(true);
   });
 });

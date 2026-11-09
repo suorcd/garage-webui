@@ -25,6 +25,7 @@ import {
 } from "../hooks";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
+import { useIsReadOnly } from "@/hooks/useAuth";
 
 type NodeListProps = {
   nodes: Node[];
@@ -32,6 +33,7 @@ type NodeListProps = {
 
 const NodesList = ({ nodes }: NodeListProps) => {
   const { data, refetch } = useClusterLayout();
+  const isReadOnly = useIsReadOnly();
   const [filter, setFilter] = useState({
     search: "",
   });
@@ -148,22 +150,30 @@ const NodesList = ({ nodes }: NodeListProps) => {
           <>
             <Button
               onClick={onRevert}
-              disabled={revertChanges.isPending || applyChanges.isPending}
+              disabled={
+                isReadOnly ||
+                revertChanges.isPending ||
+                applyChanges.isPending
+              }
             >
               Revert
             </Button>
             <Button
               color="primary"
               onClick={onApply}
-              disabled={revertChanges.isPending || applyChanges.isPending}
+              disabled={
+                isReadOnly ||
+                revertChanges.isPending ||
+                applyChanges.isPending
+              }
             >
               <Check />
               Apply
             </Button>
           </>
-        ) : (
+        ) : !isReadOnly ? (
           <ConnectNodeDialog />
-        )}
+        ) : null}
       </div>
 
       {hasStagedChanges && (
@@ -293,7 +303,11 @@ const NodesList = ({ nodes }: NodeListProps) => {
                   }
                 >
                   <Dropdown.Toggle button={false}>
-                    <Button shape="circle" color="ghost">
+                    <Button
+                      shape="circle"
+                      color="ghost"
+                      disabled={isReadOnly}
+                    >
                       <EllipsisVertical />
                     </Button>
                   </Dropdown.Toggle>

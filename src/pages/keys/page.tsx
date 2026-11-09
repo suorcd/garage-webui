@@ -10,6 +10,7 @@ import { useCallback, useMemo, useState } from "react";
 import api from "@/lib/api";
 import { Key } from "./types";
 import PageLoading from "@/components/ui/page-loading";
+import { useIsReadOnly } from "@/hooks/useAuth";
 
 type KeySecret = {
   secretAccessKey?: string | null;
@@ -36,6 +37,7 @@ const isExpiringSoon = (key: Key) => {
 
 const KeysPage = () => {
   const { data, isLoading, isError, error, refetch } = useKeys();
+  const isReadOnly = useIsReadOnly();
   const [search, setSearch] = useState("");
   const [secretKeys, setSecretKeys] = useState<Record<string, string>>({});
   const [pendingSecrets, setPendingSecrets] = useState<Record<string, boolean>>(
@@ -126,7 +128,7 @@ const KeysPage = () => {
           onChange={(e) => setSearch(e.target.value)}
         />
         <div className="flex-1" />
-        <CreateKeyDialog />
+        {!isReadOnly && <CreateKeyDialog />}
       </div>
 
       <Card className="card-body mt-4 md:mt-8 p-4">
@@ -236,8 +238,9 @@ const KeysPage = () => {
                       aria-label={`Allow key ${key.name} to create buckets`}
                       checked={key.permissions?.createBucket ?? false}
                       disabled={
-                        updateKey.isPending &&
-                        updateKey.variables?.id === key.id
+                        isReadOnly ||
+                        (updateKey.isPending &&
+                          updateKey.variables?.id === key.id)
                       }
                       onChange={(e) =>
                         updateKey.mutate({
@@ -253,6 +256,7 @@ const KeysPage = () => {
                       color="ghost"
                       icon={Trash}
                       aria-label={`Remove key ${key.name}`}
+                      disabled={isReadOnly}
                       onClick={() => onRemove(key.id)}
                     />
                   </span>

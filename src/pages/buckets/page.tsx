@@ -7,9 +7,11 @@ import BucketCard from "./components/bucket-card";
 import CreateBucketDialog from "./components/create-bucket-dialog";
 import PageLoading from "@/components/ui/page-loading";
 import { useMemo, useState } from "react";
+import { useIsReadOnly } from "@/hooks/useAuth";
 
 const BucketsPage = () => {
   const { data, isLoading, isError, error, refetch } = useBuckets();
+  const isReadOnly = useIsReadOnly();
   const [search, setSearch] = useState("");
 
   const items = useMemo(() => {
@@ -53,7 +55,7 @@ const BucketsPage = () => {
             onChange={(e) => setSearch(e.target.value)}
           />
           <div className="flex-1" />
-          <CreateBucketDialog />
+          {!isReadOnly && <CreateBucketDialog />}
         </div>
 
         {isLoading && <PageLoading />}
