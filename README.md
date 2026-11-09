@@ -14,6 +14,10 @@ A simple admin web UI for [Garage](https://garagehq.deuxfleurs.fr/), a self-host
 - Integrated objects/bucket browser
 - Create & assign access keys
 
+## Garage compatibility
+
+The UI supports Garage 2.4.1 and 2.5.0. Garage 2.5.0 is required for the key createBucket readback. See [misc/GARAGE-COMPATIBILITY.md](misc/GARAGE-COMPATIBILITY.md) for the matrix and the decision on unused admin routes.
+
 ## Installation
 
 The Garage Web UI is available as a single executable binary and docker image. You can install it using the command line or with Docker Compose.
