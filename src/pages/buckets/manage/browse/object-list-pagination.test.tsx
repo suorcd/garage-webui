@@ -59,7 +59,7 @@ const makeObjects = (start: number, count: number) =>
     const key = `obj-${String(n).padStart(4, "0")}.jpg`;
     return {
       objectKey: key,
-      lastModified: new Date(),
+      lastModified: new Date().toISOString(),
       size: 1,
       url: `/browse/bucket-b/${key}`,
     };

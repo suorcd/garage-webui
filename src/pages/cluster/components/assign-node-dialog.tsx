@@ -66,16 +66,17 @@ const AssignNodeDialog = () => {
   }, [data]);
 
   const zoneList = useMemo(() => {
-    const nodes = cluster?.nodes || cluster?.knownNodes || [];
+    const nodes = cluster?.nodes ?? [];
     const list = nodes
       .flatMap((i) => {
         const role = layout?.roles.find((role) => role.id === i.id);
         const staged = layout?.stagedRoleChanges.find(
           (role) => role.id === i.id
         );
-        return staged?.zone || role?.zone || i.role?.zone;
+        const stagedRole = staged && staged.remove !== true ? staged : undefined;
+        return stagedRole?.zone || role?.zone || i.role?.zone;
       })
-      .filter(Boolean);
+      .filter((zone): zone is string => Boolean(zone));
 
     return [...new Set(list)].map((zone) => ({
       label: zone,
@@ -84,16 +85,18 @@ const AssignNodeDialog = () => {
   }, [cluster, layout]);
 
   const tagsList = useMemo(() => {
-    const nodes = cluster?.nodes || cluster?.knownNodes || [];
+    const nodes = cluster?.nodes ?? [];
     const list = nodes
       .flatMap((i) => {
         const role = layout?.roles.find((role) => role.id === i.id);
         const staged = layout?.stagedRoleChanges.find(
           (role) => role.id === i.id
         );
-        return staged?.tags || role?.tags || i.role?.tags;
+        const stagedRole = staged && staged.remove !== true ? staged : undefined;
+        return stagedRole?.tags || role?.tags || i.role?.tags;
       })
-      .filter(Boolean);
+      .flatMap((tags) => tags ?? [])
+      .filter((tag): tag is string => Boolean(tag));
 
     return [...new Set(list)].map((tag) => ({
       label: tag,

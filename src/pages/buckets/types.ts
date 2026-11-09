@@ -43,6 +43,6 @@ export type WebsiteConfig = {
 };
 
 export type Quotas = {
-  maxSize: null;
-  maxObjects: null;
+  maxSize: number | null;
+  maxObjects: number | null;
 };
