@@ -57,6 +57,12 @@ const ShareDialog = () => {
     }
   }, [domains, domain, bucketName]);
 
+  useEffect(() => {
+    if (!isOpen) {
+      setExpires(3600);
+    }
+  }, [isOpen]);
+
   const url =
     "http://" +
     domain +

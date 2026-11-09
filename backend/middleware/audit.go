@@ -60,9 +60,7 @@ func auditUser(r *http.Request) string {
 // A read-only request is not an audit event.
 func AuditMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodGet ||
-			r.Method == http.MethodHead ||
-			r.Method == http.MethodOptions {
+		if isReadOnlyRequest(r) {
 			next.ServeHTTP(w, r)
 			return
 		}
