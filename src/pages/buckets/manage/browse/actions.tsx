@@ -1,4 +1,4 @@
-import { FolderPlus, UploadIcon } from "lucide-react";
+import { FolderPlus, FolderUp, UploadIcon } from "lucide-react";
 import Button from "@/components/ui/button";
 import { usePutObject } from "./hooks";
 import { toast } from "sonner";
@@ -42,54 +42,84 @@ const Actions = ({ prefix, canWrite }: Props) => {
 
   const putObject = usePutObject(bucket.id);
 
+  const uploadFiles = async (
+    files: FileList | File[],
+    keyFor: (file: File) => string,
+    maxFiles?: number
+  ) => {
+    if (maxFiles != null && files.length > maxFiles) {
+      toast.error(`You can only upload up to ${maxFiles} files at a time`);
+      return;
+    }
+
+    setUploading(true);
+    const failed: FailedUpload[] = [];
+    let succeeded = 0;
+
+    for (const file of Array.from(files)) {
+      try {
+        await putObject.mutateAsync({ key: keyFor(file), file });
+        succeeded += 1;
+      } catch (err) {
+        failed.push({
+          name: file.webkitRelativePath || file.name,
+          reason: (err as Error)?.message || "Unknown error",
+        });
+      }
+    }
+
+    setUploading(false);
+
+    if (failed.length === 0) {
+      toast.success(
+        `Uploaded ${succeeded} file${succeeded === 1 ? "" : "s"}.`
+      );
+    } else if (succeeded > 0) {
+      toast.warning(
+        `Uploaded ${succeeded} of ${files.length} files. Failed: ${failedSummary(failed)}.`
+      );
+    } else {
+      toast.error(`Upload failed: ${failedSummary(failed)}.`);
+    }
+
+    if (succeeded > 0) {
+      queryClient.invalidateQueries({ queryKey: ["browse", bucket.id] });
+    }
+  };
+
   const onUploadFile = () => {
     const input = document.createElement("input");
     input.type = "file";
     input.multiple = true;
 
-    input.onchange = async (e) => {
+    input.onchange = (e) => {
       const files = (e.target as HTMLInputElement).files;
-      if (!files?.length) {
-        return;
-      }
-
-      if (files.length > 20) {
-        toast.error("You can only upload up to 20 files at a time");
-        return;
-      }
-
-      setUploading(true);
-      const failed: FailedUpload[] = [];
-      let succeeded = 0;
-
-      for (const file of files) {
-        try {
-          await putObject.mutateAsync({ key: prefix + file.name, file });
-          succeeded += 1;
-        } catch (err) {
-          failed.push({
-            name: file.name,
-            reason: (err as Error)?.message || "Unknown error",
-          });
-        }
-      }
-
-      setUploading(false);
-
-      if (failed.length === 0) {
-        toast.success(
-          `Uploaded ${succeeded} file${succeeded === 1 ? "" : "s"}.`
+      if (files?.length) {
+        void uploadFiles(
+          files,
+          (file) => prefix + file.name,
+          20
         );
-      } else if (succeeded > 0) {
-        toast.warning(
-          `Uploaded ${succeeded} of ${files.length} files. Failed: ${failedSummary(failed)}.`
-        );
-      } else {
-        toast.error(`Upload failed: ${failedSummary(failed)}.`);
       }
+    };
 
-      if (succeeded > 0) {
-        queryClient.invalidateQueries({ queryKey: ["browse", bucket.id] });
+    input.click();
+    input.remove();
+  };
+
+  const onUploadFolder = () => {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.multiple = true;
+    input.setAttribute("webkitdirectory", "");
+
+    input.onchange = (e) => {
+      const files = (e.target as HTMLInputElement).files;
+      if (files?.length) {
+        void uploadFiles(
+          files,
+          (file) => prefix + (file.webkitRelativePath || file.name)
+        );
       }
     };
 
@@ -112,6 +142,18 @@ const Actions = ({ prefix, canWrite }: Props) => {
         onClick={onUploadFile}
         disabled={!canWrite || uploading}
         loading={uploading}
+      />
+      <Button
+        icon={FolderUp}
+        color="ghost"
+        title={
+          canWrite
+            ? "Upload Folder"
+            : "A key with write access is required to upload a folder."
+        }
+        aria-label="Upload folder"
+        onClick={onUploadFolder}
+        disabled={!canWrite || uploading}
       />
     </>
   );

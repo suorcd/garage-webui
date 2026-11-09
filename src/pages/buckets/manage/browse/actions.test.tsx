@@ -92,11 +92,15 @@ describe("Actions", () => {
     const upload = screen.getByTitle(
       "A key with write access is required to upload objects."
     ) as HTMLButtonElement;
+    const uploadFolder = screen.getByTitle(
+      "A key with write access is required to upload a folder."
+    ) as HTMLButtonElement;
     const folder = screen.getByTitle(
       "A key with write access is required to create folders."
     ) as HTMLButtonElement;
 
     expect(upload.disabled).toBe(true);
+    expect(uploadFolder.disabled).toBe(true);
     expect(folder.disabled).toBe(true);
   });
 
@@ -104,9 +108,13 @@ describe("Actions", () => {
     renderActions(true);
 
     const upload = screen.getByTitle("Upload File") as HTMLButtonElement;
+    const uploadFolder = screen.getByTitle(
+      "Upload Folder"
+    ) as HTMLButtonElement;
     const folder = screen.getByTitle("Create Folder") as HTMLButtonElement;
 
     expect(upload.disabled).toBe(false);
+    expect(uploadFolder.disabled).toBe(false);
     expect(folder.disabled).toBe(false);
   });
 
@@ -132,6 +140,33 @@ describe("Actions", () => {
     expect(invalidateSpy).toHaveBeenCalledWith({
       queryKey: ["browse", "bucket-1"],
     });
+    clickSpy.mockRestore();
+  });
+
+  it("uploads a folder with the relative path in each key", async () => {
+    const { invalidateSpy } = renderActions(true);
+    const files = testFiles(["a.txt", "b.txt"]);
+    Object.defineProperty(files[0], "webkitRelativePath", {
+      value: "photos/a.txt",
+    });
+    Object.defineProperty(files[1], "webkitRelativePath", {
+      value: "photos/nested/b.txt",
+    });
+    const clickSpy = pickFiles(files);
+
+    fireEvent.click(screen.getByTitle("Upload Folder"));
+
+    await waitFor(() => expect(toastSuccess).toHaveBeenCalledTimes(1));
+    expect(toastSuccess).toHaveBeenCalledWith("Uploaded 2 files.");
+    expect(mutateAsyncMock).toHaveBeenNthCalledWith(1, {
+      key: "photos/a.txt",
+      file: files[0],
+    });
+    expect(mutateAsyncMock).toHaveBeenNthCalledWith(2, {
+      key: "photos/nested/b.txt",
+      file: files[1],
+    });
+    expect(invalidateSpy).toHaveBeenCalledTimes(1);
     clickSpy.mockRestore();
   });
 
@@ -239,6 +274,9 @@ describe("Actions", () => {
 
     expect(
       screen.getByRole("button", { name: "Upload file" })
+    ).toBeTruthy();
+    expect(
+      screen.getByRole("button", { name: "Upload folder" })
     ).toBeTruthy();
     expect(
       screen.getByRole("button", { name: "Create folder" })
