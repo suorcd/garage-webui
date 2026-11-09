@@ -7,6 +7,7 @@ import ObjectListNavigator from "./object-list-navigator";
 import Actions from "./actions";
 import { useBucketContext } from "../context";
 import ShareDialog from "./share-dialog";
+import { useIsReadOnly } from "@/hooks/useAuth";
 
 const BrowseHint = ({ children }: PropsWithChildren) => {
   return (
@@ -27,6 +28,7 @@ const getInitialPrefixes = (searchParams: URLSearchParams) => {
 
 const BrowseTab = () => {
   const { bucket } = useBucketContext();
+  const isReadOnly = useIsReadOnly();
   const [searchParams, setSearchParams] = useSearchParams();
   const [prefixHistory, setPrefixHistory] = useState<string[]>(
     getInitialPrefixes(searchParams)
@@ -98,9 +100,11 @@ const BrowseTab = () => {
     );
   }
 
-  const canWrite = bucket.keys.some(
-    (key) => key.permissions.write || key.permissions.owner
-  );
+  const canWrite =
+    !isReadOnly &&
+    bucket.keys.some(
+      (key) => key.permissions.write || key.permissions.owner
+    );
 
   return (
     <div>

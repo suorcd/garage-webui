@@ -7,9 +7,11 @@ import { useMemo } from "react";
 import { toast } from "sonner";
 import { handleError } from "@/lib/utils";
 import { useBucketContext } from "../context";
+import { useIsReadOnly } from "@/hooks/useAuth";
 
 const PermissionsTab = () => {
   const { bucket, refetch } = useBucketContext();
+  const isReadOnly = useIsReadOnly();
 
   const denyKey = useDenyKey(bucket.id, {
     onSuccess: () => {
@@ -47,7 +49,7 @@ const PermissionsTab = () => {
       <Card className="card-body">
         <div className="flex flex-row items-center gap-2">
           <Card.Title className="flex-1 truncate">Access Keys</Card.Title>
-          <AllowKeyDialog currentKeys={currentKeys} />
+          {!isReadOnly && <AllowKeyDialog currentKeys={currentKeys} />}
         </div>
 
         <div className="overflow-x-auto">
@@ -105,6 +107,7 @@ const PermissionsTab = () => {
                       <Button
                         icon={Trash}
                         aria-label={`Remove key ${label}`}
+                        disabled={isReadOnly}
                         onClick={() => onRemove(key.accessKeyId)}
                       />
                     </Table.Row>

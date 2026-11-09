@@ -15,6 +15,7 @@ import BrowseTab from "./browse/browse-tab";
 import { BucketContext } from "./context";
 import { Alert, Loading } from "react-daisyui";
 import Button from "@/components/ui/button";
+import { useIsReadOnly } from "@/hooks/useAuth";
 
 const tabs: Tab[] = [
   {
@@ -40,6 +41,7 @@ const tabs: Tab[] = [
 const ManageBucketPage = () => {
   const { id } = useParams();
   const { data, error, isLoading, refetch } = useBucket(id);
+  const isReadOnly = useIsReadOnly();
 
   const globalName = data?.globalAliases?.[0];
   const localName = data?.keys?.find(
@@ -52,7 +54,7 @@ const ManageBucketPage = () => {
       <Page
         title={name || "Manage Bucket"}
         prev="/buckets"
-        actions={data ? <MenuButton /> : undefined}
+        actions={data && !isReadOnly ? <MenuButton /> : undefined}
       />
 
       {isLoading && (

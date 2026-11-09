@@ -14,6 +14,7 @@ import { cn, handleError } from "@/lib/utils";
 import { API_URL } from "@/lib/api";
 import { shareDialog } from "./share-dialog";
 import { useRef } from "react";
+import { useIsReadOnly } from "@/hooks/useAuth";
 
 type Props = {
   prefix?: string;
@@ -23,11 +24,14 @@ type Props = {
 
 const ObjectActions = ({ prefix = "", object, end }: Props) => {
   const { bucket, bucketName } = useBucketContext();
+  const isReadOnly = useIsReadOnly();
   const queryClient = useQueryClient();
   const isDirectory = object.objectKey.endsWith("/");
-  const canWrite = bucket.keys.some(
-    (key) => key.permissions.write || key.permissions.owner
-  );
+  const canWrite =
+    !isReadOnly &&
+    bucket.keys.some(
+      (key) => key.permissions.write || key.permissions.owner
+    );
   // A truncated delete runs again for the same prefix until no objects
   // remain. The counts accumulate across the pages.
   const deletedTotal = useRef(0);
