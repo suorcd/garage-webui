@@ -59,7 +59,7 @@ const AssignNodeDialog = () => {
         ...defaultValues,
         ...data,
         capacity: cap.value,
-        capacityUnit: cap.unit,
+        capacityUnit: cap.unit ?? defaultValues.capacityUnit,
         isGateway,
       });
     }

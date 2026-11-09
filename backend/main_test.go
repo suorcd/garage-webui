@@ -93,6 +93,37 @@ func TestValidateGarageConfigRejectsEmptyToken(t *testing.T) {
 	}
 }
 
+func TestValidateAuthConfig(t *testing.T) {
+	if err := validateAuthConfig("admin:hash", "viewer:hash", false); err != nil {
+		t.Fatalf("expected valid admin and viewer credentials to pass, got %v", err)
+	}
+	if err := validateAuthConfig("", "", true); err != nil {
+		t.Fatalf("expected disabled auth to pass, got %v", err)
+	}
+
+	cases := []struct {
+		name     string
+		admin    string
+		readonly string
+		disabled bool
+	}{
+		{"missing admin", "", "", false},
+		{"missing admin hash", "admin:", "", false},
+		{"missing admin username", ":hash", "", false},
+		{"missing readonly hash", "admin:hash", "viewer:", false},
+		{"missing readonly username", "admin:hash", ":hash", false},
+		{"duplicate username", "admin:hash", "admin:other-hash", false},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if err := validateAuthConfig(tc.admin, tc.readonly, tc.disabled); err == nil {
+				t.Fatalf("expected %s to fail validation", tc.name)
+			}
+		})
+	}
+}
+
 func TestBasePathTrailingSlashRoutesAPI(t *testing.T) {
 	t.Setenv("AUTH_DISABLED", "true")
 	t.Setenv("AUTH_USER_PASS", "")
