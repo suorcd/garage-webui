@@ -2,10 +2,16 @@ import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/re
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const { apiGet, apiPut, apiDelete } = vi.hoisted(() => ({
+const { apiGet, apiPut, apiDelete, bucketState } = vi.hoisted(() => ({
   apiGet: vi.fn(),
   apiPut: vi.fn(),
   apiDelete: vi.fn(),
+  bucketState: {
+    id: "b1",
+    keys: [
+      { permissions: { read: true, write: true, owner: false } },
+    ] as { permissions: { read: boolean; write: boolean; owner: boolean } }[],
+  },
 }));
 
 vi.mock("@/lib/api", () => ({
@@ -13,7 +19,7 @@ vi.mock("@/lib/api", () => ({
 }));
 
 vi.mock("../context", () => ({
-  useBucketContext: () => ({ bucket: { id: "b1" } }),
+  useBucketContext: () => ({ bucket: bucketState }),
 }));
 
 vi.mock("sonner", () => ({
@@ -40,6 +46,9 @@ describe("CORSSection", () => {
     apiGet.mockReset();
     apiPut.mockReset();
     apiDelete.mockReset();
+    bucketState.keys = [
+      { permissions: { read: true, write: true, owner: false } },
+    ];
     apiGet.mockResolvedValue({
       rules: [
         {
@@ -103,5 +112,32 @@ describe("CORSSection", () => {
     await waitFor(() =>
       expect(apiDelete).toHaveBeenCalledWith("/buckets/b1/cors")
     );
+  });
+
+  it("skips the query and shows a note when the bucket has no read key", () => {
+    bucketState.keys = [];
+    renderSection();
+
+    expect(apiGet).not.toHaveBeenCalled();
+    expect(
+      screen.getByText(/Grant read access to a key to view CORS rules/)
+    ).toBeTruthy();
+  });
+
+  it("disables Save CORS and Remove CORS when the bucket has no write key", async () => {
+    bucketState.keys = [
+      { permissions: { read: true, write: false, owner: false } },
+    ];
+    renderSection();
+
+    await screen.findByLabelText("CORS rules JSON");
+    expect(
+      (screen.getByRole("button", { name: "Save CORS" }) as HTMLButtonElement)
+        .disabled
+    ).toBe(true);
+    expect(
+      (screen.getByRole("button", { name: "Remove CORS" }) as HTMLButtonElement)
+        .disabled
+    ).toBe(true);
   });
 });
