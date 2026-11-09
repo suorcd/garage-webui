@@ -20,31 +20,33 @@ const BucketCard = ({ data }: Props) => {
           </p>
         </div>
 
-        {data.error && (
+        {data.error ? (
           <div className="col-span-2">
             <Alert status="error" icon={<CircleXIcon />}>
               <span className="text-sm">{data.error}</span>
             </Alert>
           </div>
+        ) : (
+          <>
+            <div>
+              <p className="text-sm flex items-center gap-1">
+                <ChartPie className="inline" size={16} />
+                Usage
+              </p>
+              <p className="text-xl font-medium mt-1">
+                {readableBytes(data.bytes)}
+              </p>
+            </div>
+
+            <div>
+              <p className="text-sm flex items-center gap-1">
+                <ChartScatter className="inline" size={16} />
+                Objects
+              </p>
+              <p className="text-xl font-medium mt-1">{data.objects}</p>
+            </div>
+          </>
         )}
-
-        <div>
-          <p className="text-sm flex items-center gap-1">
-            <ChartPie className="inline" size={16} />
-            Usage
-          </p>
-          <p className="text-xl font-medium mt-1">
-            {readableBytes(data.bytes)}
-          </p>
-        </div>
-
-        <div>
-          <p className="text-sm flex items-center gap-1">
-            <ChartScatter className="inline" size={16} />
-            Objects
-          </p>
-          <p className="text-xl font-medium mt-1">{data.objects}</p>
-        </div>
       </div>
 
       <div className="flex flex-row justify-end gap-4">

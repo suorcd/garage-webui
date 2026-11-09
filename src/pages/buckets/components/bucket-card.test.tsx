@@ -44,4 +44,23 @@ describe("BucketCard", () => {
 
     expect(screen.queryByText(/cannot get bucket info/)).toBeNull();
   });
+
+  it("does not show zero counts when the bucket fetch failed", () => {
+    render(
+      <MemoryRouter>
+        <BucketCard
+          data={{
+            ...bucket,
+            objects: 0,
+            bytes: 0,
+            error: "cannot get bucket info: boom",
+          }}
+        />
+      </MemoryRouter>
+    );
+
+    expect(screen.getByText("cannot get bucket info: boom")).toBeTruthy();
+    expect(screen.queryByText("0.0 B")).toBeNull();
+    expect(screen.queryByText("0")).toBeNull();
+  });
 });
