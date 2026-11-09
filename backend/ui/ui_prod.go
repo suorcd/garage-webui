@@ -6,6 +6,7 @@ package ui
 import (
 	"embed"
 	"io/fs"
+	"log"
 	"net/http"
 	"os"
 	"path"
@@ -15,6 +16,10 @@ import (
 
 //go:embed dist
 var embeddedFs embed.FS
+
+// basePathPattern matches a root-relative asset reference in index.html.
+// Compile it once: the pattern is used on every index request.
+var basePathPattern = regexp.MustCompile(`(href|src)=["'](/[^"'>]+)["']`)
 
 // normalizeBasePath strips trailing slashes from a base path and maps
 // "/" to "". It mirrors the frontend normalisation in src/lib/consts.ts.
@@ -27,72 +32,51 @@ func normalizeBasePath(basePath string) string {
 	return trimmed
 }
 
-// bakedBasePath reads the base path the frontend build baked into
-// index.html: the entry script reference holds it. A root build
-// references /assets/..., a subpath build references /sub/assets/....
-// It returns "" when the file holds no such reference.
-func bakedBasePath(distFs fs.FS) string {
-	index, err := fs.ReadFile(distFs, "index.html")
-	if err != nil {
-		return ""
-	}
-
-	html := string(index)
-	start := strings.Index(html, `src="`)
-	if start < 0 {
-		return ""
-	}
-
-	rest := html[start+len(`src="`):]
-	end := strings.Index(rest, "/assets/")
-	if end < 0 {
-		return ""
-	}
-
-	return rest[:end]
-}
-
 func ServeUI(mux *http.ServeMux) {
-	distFs, _ := fs.Sub(embeddedFs, "dist")
+	distFs, err := fs.Sub(embeddedFs, "dist")
+	if err != nil {
+		log.Fatalf("cannot open the embedded UI: %v", err)
+	}
+
 	fileServer := http.FileServer(http.FS(distFs))
 	basePath := normalizeBasePath(os.Getenv("BASE_PATH"))
-	bakedBase := bakedBasePath(distFs)
 
 	mux.Handle(basePath+"/", http.StripPrefix(basePath, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		_path := path.Clean(r.URL.Path)[1:]
 
-		// Rewrite non-existing paths to index.html
+		// A missing asset is a broken build. Return 404 instead of the
+		// index document, so the network tab shows the real failure.
 		if _, err := fs.Stat(distFs, _path); err != nil {
-			index, _ := fs.ReadFile(distFs, "index.html")
-			html := string(index)
+			if strings.HasPrefix(_path, "assets/") {
+				http.NotFound(w, r)
+				return
+			}
 
-			// Set base path for the UI
+			index, err := fs.ReadFile(distFs, "index.html")
+			if err != nil {
+				log.Printf("cannot read the embedded index.html: %v", err)
+				http.Error(w, "UI is unavailable", http.StatusInternalServerError)
+				return
+			}
+
+			html := string(index)
 			html = strings.ReplaceAll(html, "%BASE_PATH%", basePath)
 			html = addBasePath(html, basePath)
 
-			w.Header().Add("Content-Type", "text/html")
+			w.Header().Set("Content-Type", "text/html; charset=utf-8")
+			w.Header().Set("Cache-Control", "no-cache")
 			w.WriteHeader(http.StatusOK)
-			w.Write([]byte(html))
+			if _, err := w.Write([]byte(html)); err != nil {
+				log.Printf("cannot write index.html: %v", err)
+			}
 			return
 		}
 
-		// Prefix the asset paths in built JS, but only for a root build
-		// served under a base path, and only the two shapes Vite emits:
-		// an absolute "/assets/..." asset URL and a bare "assets/..."
-		// preload entry. A blind replace of "assets/" would also
-		// rewrite that text inside other string constants. A build
-		// that already bakes the base path passes through untouched:
-		// its preload helper already prefixes the bare entries.
-		if len(basePath) > 0 && bakedBase == "" && strings.HasSuffix(_path, ".js") {
-			data, _ := fs.ReadFile(distFs, _path)
-			html := string(data)
-			html = strings.ReplaceAll(html, `"/assets/`, `"/`+basePath[1:]+`/assets/`)
-			html = strings.ReplaceAll(html, `"assets/`, `"`+basePath[1:]+`/assets/`)
-
-			w.Header().Add("Content-Type", "text/javascript")
-			w.WriteHeader(http.StatusOK)
-			w.Write([]byte(html))
-			return
+		// Vite gives every asset a content hash. Cache it forever.
+		if strings.HasPrefix(_path, "assets/") {
+			w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
+		} else if _path == "" || _path == "index.html" {
+			w.Header().Set("Cache-Control", "no-cache")
 		}
 
 		fileServer.ServeHTTP(w, r)
@@ -104,14 +88,13 @@ func addBasePath(html string, basePath string) string {
 		return html
 	}
 
-	re := regexp.MustCompile(`(href|src)=["'](/[^"'>]+)["']`)
-	return re.ReplaceAllStringFunc(html, func(match string) string {
+	return basePathPattern.ReplaceAllStringFunc(html, func(match string) string {
 		// Skip a reference that already holds the base path, so a
 		// build that bakes the base path is not prefixed twice.
 		if strings.Contains(match, `"`+basePath+`/`) || strings.Contains(match, `'`+basePath+`/`) {
 			return match
 		}
 
-		return re.ReplaceAllString(match, `$1="`+basePath+`$2"`)
+		return basePathPattern.ReplaceAllString(match, `$1="`+basePath+`$2"`)
 	})
 }

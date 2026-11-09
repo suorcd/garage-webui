@@ -93,7 +93,7 @@ func TestServeUIAddsBasePathToIndex(t *testing.T) {
 	}
 }
 
-func TestServeUIJSAssetPaths(t *testing.T) {
+func TestServeUIJSAssetIsServedUnchanged(t *testing.T) {
 	t.Setenv("BASE_PATH", "/sub")
 
 	mux := http.NewServeMux()
@@ -112,33 +112,47 @@ func TestServeUIJSAssetPaths(t *testing.T) {
 	if !strings.Contains(header.Get("Content-Type"), "text/javascript") {
 		t.Fatalf("expected text/javascript, got %q", header.Get("Content-Type"))
 	}
+	if body != string(want) {
+		t.Fatalf("served JS differs from the built file")
+	}
+}
 
-	// A build that already bakes the base path passes through
-	// untouched. A root build gets exactly the two asset-path shapes
-	// prefixed once: the absolute logo URL and the bare preload entries.
-	if bakedBase(t) == "/sub" {
-		if body != string(want) {
-			t.Fatalf("served JS differs from the built file")
-		}
+func TestServeUIMissingAssetReturnsNotFound(t *testing.T) {
+	t.Setenv("BASE_PATH", "/sub")
 
-		return
+	mux := http.NewServeMux()
+	ServeUI(mux)
+
+	code, body, _ := get(t, mux, "/sub/assets/missing.js")
+	if code != http.StatusNotFound {
+		t.Fatalf("expected status 404, got %d: %s", code, body)
+	}
+	if strings.Contains(body, "window.__BASE_PATH") {
+		t.Fatalf("missing asset returned the index document")
+	}
+}
+
+func TestServeUICacheControl(t *testing.T) {
+	t.Setenv("BASE_PATH", "/sub")
+
+	mux := http.NewServeMux()
+	ServeUI(mux)
+
+	name := entryJSName(t)
+	code, _, header := get(t, mux, "/sub/assets/"+name)
+	if code != http.StatusOK {
+		t.Fatalf("expected status 200 for the entry chunk, got %d", code)
+	}
+	if got := header.Get("Cache-Control"); got != "public, max-age=31536000, immutable" {
+		t.Fatalf("expected an immutable cache header for a hashed asset, got %q", got)
 	}
 
-	if !strings.Contains(body, `"/sub/assets/garage-logo-`) {
-		t.Fatalf("served JS does not prefix the logo URL")
+	code, _, header = get(t, mux, "/sub/")
+	if code != http.StatusOK {
+		t.Fatalf("expected status 200 for index.html, got %d", code)
 	}
-	if strings.Contains(body, `"/assets/garage-logo-`) {
-		t.Fatalf("served JS still holds the unprefixed logo URL")
-	}
-	if strings.Contains(body, `"assets/`) {
-		t.Fatalf("served JS still holds a bare preload entry")
-	}
-
-	// Each prefix adds len("/sub") bytes: "/assets/" becomes
-	// "/sub/assets/", and "assets/" becomes "sub/assets/".
-	rewrites := strings.Count(string(want), `"/assets/`) + strings.Count(string(want), `"assets/`)
-	if len(body) != len(want)+len("/sub")*rewrites {
-		t.Fatalf("served JS changed by more than the asset prefix")
+	if got := header.Get("Cache-Control"); got != "no-cache" {
+		t.Fatalf("expected a no-cache header for index.html, got %q", got)
 	}
 }
 

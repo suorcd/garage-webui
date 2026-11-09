@@ -183,7 +183,7 @@ However, if it fails to load, you can set `API_BASE_URL` & `API_ADMIN_KEY` envir
 Configurable envs:
 
 - `CONFIG_PATH`: Path to the Garage `config.toml` file. Defaults to `/etc/garage.toml`.
-- `BASE_PATH`: Base path or prefix for Web UI. Empty by default.
+- `BASE_PATH`: Base path or prefix for the Web UI. Empty by default. Set `VITE_BASE_PATH` to the same value when you build the frontend.
 - `HOST`: Bind address for the web server. Defaults to `0.0.0.0`.
 - `PORT`: Port for the web server. Defaults to `3909`.
 - `API_BASE_URL`: Garage admin API endpoint URL. Without this value, the server derives the endpoint from `garage.toml`.
@@ -196,6 +196,8 @@ Configurable envs:
 - `AUTH_DISABLED`: Set to `true` to disable authentication for local development. The server logs a warning. Do not use this value in production.
 - `TRUSTED_PROXIES`: IPs and CIDRs of trusted proxies, comma separated. Only these proxies may set `X-Forwarded-For` and `X-Real-IP`. Empty means no proxy is trusted.
 - `SESSION_COOKIE_SECURE`: Set to `false` for a plain HTTP install. Defaults to `true`. A browser drops a Secure cookie over plain HTTP, and login never sticks.
+
+Set `VITE_BASE_PATH` to the same value as `BASE_PATH` when you build the frontend. The build bakes the asset paths, and the server does not rewrite them. The Dockerfile accepts `VITE_BASE_PATH` as a build argument.
 
 The server uses a 10 second `ReadHeaderTimeout` and a 120 second `IdleTimeout`. It sets no `WriteTimeout`, so streaming downloads and ZIP responses can run long. Do not add a `WriteTimeout`. It would cut off slow downloads.
 
