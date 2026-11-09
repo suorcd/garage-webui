@@ -168,4 +168,28 @@ describe("ShareDialog domains", () => {
     );
     expect(copyMock).toHaveBeenCalledWith("https://signed.example.com/file");
   });
+
+  it("resets the presigned link expiry when closed", async () => {
+    const user = userEvent.setup();
+    renderDialog("file.txt", "photos/");
+
+    const select = screen.getByLabelText(
+      "Presigned link expiry"
+    ) as HTMLSelectElement;
+    await user.selectOptions(select, "604800");
+    expect(select.value).toBe("604800");
+
+    await user.click(screen.getByRole("button", { name: "Close" }));
+    shareDialog.open({ key: "file.txt", prefix: "photos/" });
+
+    await waitFor(() =>
+      expect(
+        (
+          screen.getByLabelText(
+            "Presigned link expiry"
+          ) as HTMLSelectElement
+        ).value
+      ).toBe("3600")
+    );
+  });
 });

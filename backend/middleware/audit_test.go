@@ -95,3 +95,24 @@ func TestAuditMiddlewareUsesSessionUsername(t *testing.T) {
 		t.Fatalf("expected the session username in the audit line, got %s", line[start:])
 	}
 }
+
+func TestAuditMiddlewareSkipsPresignRequest(t *testing.T) {
+	t.Setenv("AUTH_USER_PASS", "alice:test-hash")
+	t.Setenv("AUTH_DISABLED", "")
+	sessionMgr := utils.InitSessionManager()
+
+	var output bytes.Buffer
+	previous := log.Writer()
+	log.SetOutput(&output)
+	t.Cleanup(func() { log.SetOutput(previous) })
+
+	handler := sessionMgr.LoadAndSave(AuditMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})))
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/buckets/b1/presign", nil))
+
+	if got := strings.TrimSpace(output.String()); got != "" {
+		t.Fatalf("expected no audit line for a presign request, got %q", got)
+	}
+}
