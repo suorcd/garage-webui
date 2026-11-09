@@ -461,7 +461,7 @@ func TestGetObjectsCancelsCredentialFetchWhenRequestContextEnds(t *testing.T) {
 				}},
 			})
 		case "/v2/GetKeyInfo":
-			json.NewEncoder(w).Encode(schema.KeyElement{
+			json.NewEncoder(w).Encode(schema.KeySecret{
 				AccessKeyID:     "test-access-key",
 				SecretAccessKey: "test-secret-key",
 			})

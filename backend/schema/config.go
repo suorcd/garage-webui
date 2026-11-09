@@ -14,16 +14,16 @@ type PublicS3Web struct {
 type Config struct {
 	RPCBindAddr   string `json:"rpc_bind_addr" toml:"rpc_bind_addr"`
 	RPCPublicAddr string `json:"rpc_public_addr" toml:"rpc_public_addr"`
-	RPCSecret     string `json:"rpc_secret" toml:"rpc_secret"`
+	RPCSecret     string `json:"-" toml:"rpc_secret"`
 	Admin         Admin  `json:"admin" toml:"admin"`
 	S3API         S3API  `json:"s3_api" toml:"s3_api"`
 	S3Web         S3Web  `json:"s3_web" toml:"s3_web"`
 }
 
 type Admin struct {
-	AdminToken   string `json:"admin_token" toml:"admin_token"`
+	AdminToken   string `json:"-" toml:"admin_token"`
 	APIBindAddr  string `json:"api_bind_addr" toml:"api_bind_addr"`
-	MetricsToken string `json:"metrics_token" toml:"metrics_token"`
+	MetricsToken string `json:"-" toml:"metrics_token"`
 }
 
 type S3API struct {

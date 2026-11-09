@@ -33,7 +33,7 @@ func (f *fakeCapabilityGarage) ServeHTTP(w http.ResponseWriter, r *http.Request)
 		for _, key := range f.keys {
 			if key.AccessKeyID == id {
 				w.Header().Set("Content-Type", "application/json")
-				json.NewEncoder(w).Encode(schema.KeyElement{
+				json.NewEncoder(w).Encode(schema.KeySecret{
 					AccessKeyID:     id,
 					SecretAccessKey: "secret-" + id,
 				})
