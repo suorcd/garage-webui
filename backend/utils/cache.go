@@ -36,17 +36,17 @@ func (c *CacheManager) Get(key string) interface{} {
 		return nil
 	}
 
-	cacheEntry := entry.(CacheEntry)
+	cacheEntry, ok := entry.(CacheEntry)
+	if !ok {
+		c.cache.Delete(key)
+		return nil
+	}
 	if cacheEntry.expiresAt.Before(time.Now()) {
 		c.cache.Delete(key)
 		return nil
 	}
 
 	return cacheEntry.value
-}
-
-func (c *CacheManager) IsExpired(entry CacheEntry) bool {
-	return entry.expiresAt.Before(time.Now())
 }
 
 func (c *CacheManager) ClearPrefix(prefix string) {
