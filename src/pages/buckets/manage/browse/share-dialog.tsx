@@ -6,8 +6,11 @@ import { useEffect, useMemo, useState } from "react";
 import Input from "@/components/ui/input";
 import Button from "@/components/ui/button";
 import { Copy, FileWarningIcon } from "lucide-react";
-import { copyToClipboard, encodePath } from "@/lib/utils";
+import { copyToClipboard, encodePath, handleError } from "@/lib/utils";
 import Checkbox from "@/components/ui/checkbox";
+import { useMutation } from "@tanstack/react-query";
+import { toast } from "sonner";
+import api from "@/lib/api";
 
 export const shareDialog = createDisclosure<{ key: string; prefix: string }>();
 
@@ -16,6 +19,25 @@ const ShareDialog = () => {
   const { bucket, bucketName } = useBucketContext();
   const { data: config } = useConfig();
   const [domain, setDomain] = useState(bucketName);
+  const [expires, setExpires] = useState(3600);
+
+  const presign = useMutation({
+    mutationFn: () =>
+      api.post<{ url: string }>(
+        `/buckets/${encodeURIComponent(bucket.id)}/presign`,
+        {
+          body: {
+            key: `${data?.prefix ?? ""}${data?.key ?? ""}`,
+            expiresSeconds: expires,
+          },
+        }
+      ),
+    onSuccess: (result) => {
+      copyToClipboard(result.url);
+      toast.success("Presigned link copied!");
+    },
+    onError: handleError,
+  });
 
   const websitePort = config?.s3_web?.bind_addr?.split(":").pop() || "80";
   const rootDomain = config?.s3_web?.root_domain;
@@ -76,6 +98,31 @@ const ShareDialog = () => {
             className="absolute top-0 right-0"
             color="ghost"
           />
+        </div>
+
+        <div className="divider mt-4" />
+        <p className="font-medium">Presigned link</p>
+        <p className="text-sm text-base-content/60">
+          The link works without website access.
+        </p>
+        <div className="flex flex-row flex-wrap items-center gap-2 mt-2">
+          <select
+            className="select select-bordered select-sm"
+            aria-label="Presigned link expiry"
+            value={expires}
+            onChange={(event) => setExpires(Number(event.target.value))}
+          >
+            <option value={3600}>1 hour</option>
+            <option value={86400}>24 hours</option>
+            <option value={604800}>7 days</option>
+          </select>
+          <Button
+            onClick={() => presign.mutate()}
+            loading={presign.isPending}
+            disabled={presign.isPending}
+          >
+            Copy presigned link
+          </Button>
         </div>
       </Modal.Body>
       <Modal.Actions>

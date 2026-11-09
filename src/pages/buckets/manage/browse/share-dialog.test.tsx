@@ -1,11 +1,23 @@
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Config } from "@/types/garage";
 
-const { configResult } = vi.hoisted(() => ({
+const { configResult, apiPost, copyMock } = vi.hoisted(() => ({
   configResult: { data: undefined as Config | undefined },
+  apiPost: vi.fn(),
+  copyMock: vi.fn(),
 }));
+
+vi.mock("@/lib/api", () => ({
+  default: { post: apiPost },
+}));
+
+vi.mock("@/lib/utils", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/utils")>();
+  return { ...actual, copyToClipboard: copyMock };
+});
 
 vi.mock("../context", () => ({
   useBucketContext: () => ({
@@ -22,8 +34,16 @@ vi.mock("@/hooks/useConfig", () => ({
 import ShareDialog, { shareDialog } from "./share-dialog";
 
 const renderDialog = (key = "file.txt", prefix = "") => {
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
   shareDialog.open({ key, prefix });
-  return render(<ShareDialog />);
+  const result = render(
+    <QueryClientProvider client={queryClient}>
+      <ShareDialog />
+    </QueryClientProvider>
+  );
+  return { ...result, queryClient };
 };
 
 const checkbox = (label: string) =>
@@ -73,7 +93,7 @@ describe("ShareDialog domains", () => {
       s3_web: { bind_addr: "127.0.0.1:3902", root_domain: ".example.com" },
     };
     const user = userEvent.setup();
-    const { rerender } = renderDialog();
+    const { rerender, queryClient } = renderDialog();
 
     await user.click(checkbox("mybucket.example.com"));
     expect(checkbox("mybucket.example.com").checked).toBe(true);
@@ -82,7 +102,11 @@ describe("ShareDialog domains", () => {
     configResult.data = {
       s3_web: { bind_addr: "127.0.0.1:3902", root_domain: ".example.com" },
     };
-    rerender(<ShareDialog />);
+    rerender(
+      <QueryClientProvider client={queryClient}>
+        <ShareDialog />
+      </QueryClientProvider>
+    );
 
     expect(checkbox("mybucket.example.com").checked).toBe(true);
   });
@@ -92,13 +116,17 @@ describe("ShareDialog domains", () => {
       s3_web: { bind_addr: "127.0.0.1:3902", root_domain: ".example.com" },
     };
     const user = userEvent.setup();
-    const { rerender } = renderDialog();
+    const { rerender, queryClient } = renderDialog();
 
     await user.click(checkbox("mybucket.example.com"));
     expect(checkbox("mybucket.example.com").checked).toBe(true);
 
     configResult.data = {};
-    rerender(<ShareDialog />);
+    rerender(
+      <QueryClientProvider client={queryClient}>
+        <ShareDialog />
+      </QueryClientProvider>
+    );
 
     expect(screen.getAllByRole("checkbox")).toHaveLength(1);
     expect(checkbox("mybucket").checked).toBe(true);
@@ -118,5 +146,26 @@ describe("ShareDialog domains", () => {
     renderDialog();
 
     expect(screen.getByRole("button", { name: "Copy link" })).toBeTruthy();
+  });
+
+  it("copies a presigned link with the selected expiry", async () => {
+    apiPost.mockResolvedValue({ url: "https://signed.example.com/file" });
+    const user = userEvent.setup();
+    renderDialog("file.txt", "photos/");
+
+    await user.selectOptions(
+      screen.getByLabelText("Presigned link expiry"),
+      "86400"
+    );
+    await user.click(
+      screen.getByRole("button", { name: "Copy presigned link" })
+    );
+
+    await waitFor(() =>
+      expect(apiPost).toHaveBeenCalledWith("/buckets/bucket-1/presign", {
+        body: { key: "photos/file.txt", expiresSeconds: 86400 },
+      })
+    );
+    expect(copyMock).toHaveBeenCalledWith("https://signed.example.com/file");
   });
 });
