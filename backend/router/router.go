@@ -24,6 +24,11 @@ func HandleApiRouter() http.Handler {
 	router.HandleFunc("POST /v2/AllowBucketKey", buckets.AllowKey)
 	router.HandleFunc("POST /v2/DenyBucketKey", buckets.DenyKey)
 
+	cors := &BucketCORS{}
+	router.HandleFunc("GET /buckets/{bucket}/cors", cors.Get)
+	router.HandleFunc("PUT /buckets/{bucket}/cors", cors.Put)
+	router.HandleFunc("DELETE /buckets/{bucket}/cors", cors.Delete)
+
 	keys := &Keys{}
 	router.HandleFunc("POST /v2/DeleteKey", keys.Delete)
 	router.HandleFunc("POST /v2/UpdateKey", keys.Update)

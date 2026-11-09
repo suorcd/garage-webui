@@ -46,3 +46,16 @@ export type Quotas = {
   maxSize: number | null;
   maxObjects: number | null;
 };
+
+export type CORSRule = {
+  allowedHeaders: string[];
+  allowedMethods: string[];
+  allowedOrigins: string[];
+  exposeHeaders?: string[];
+  maxAgeSeconds?: number;
+  id?: string;
+};
+
+export type CORSConfiguration = {
+  rules: CORSRule[];
+};
