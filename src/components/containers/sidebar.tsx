@@ -6,7 +6,7 @@ import {
   LayoutDashboard,
   LogOut,
 } from "lucide-react";
-import { Menu } from "react-daisyui";
+import { Badge, Menu } from "react-daisyui";
 import { Link, useLocation } from "react-router-dom";
 import Button from "../ui/button";
 import { themes, type Themes } from "@/app/themes";
@@ -40,6 +40,11 @@ const Sidebar = () => {
           className="w-full max-w-[100px] mx-auto"
         />
         <p className="text-sm font-medium text-center">WebUI</p>
+        {auth.isReadOnly ? (
+          <Badge color="warning" className="mx-auto mt-2">
+            Read-only
+          </Badge>
+        ) : null}
       </div>
 
       <Menu className="gap-y-1 flex-1 overflow-y-auto">

@@ -8,20 +8,23 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"khairul169/garage-webui/utils"
 )
 
 func TestAuditMiddlewareLogsStateChanges(t *testing.T) {
 	t.Setenv("AUTH_USER_PASS", "alice:test-hash")
 	t.Setenv("AUTH_DISABLED", "")
+	sessionMgr := utils.InitSessionManager()
 
 	var output bytes.Buffer
 	previous := log.Writer()
 	log.SetOutput(&output)
 	t.Cleanup(func() { log.SetOutput(previous) })
 
-	handler := AuditMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	handler := sessionMgr.LoadAndSave(AuditMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
-	}))
+	})))
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/v2/DeleteKey", nil))
 
@@ -56,5 +59,39 @@ func TestAuditMiddlewareLogsStateChanges(t *testing.T) {
 	}
 	if event.Time == "" {
 		t.Error("expected a timestamp")
+	}
+}
+
+func TestAuditMiddlewareUsesSessionUsername(t *testing.T) {
+	t.Setenv("AUTH_USER_PASS", "admin:test-hash")
+	t.Setenv("AUTH_DISABLED", "")
+
+	var output bytes.Buffer
+	previous := log.Writer()
+	log.SetOutput(&output)
+	t.Cleanup(func() { log.SetOutput(previous) })
+
+	sessionMgr := utils.InitSessionManager()
+	req := httptest.NewRequest(http.MethodPost, "/v2/DeleteKey", nil)
+	ctx, err := sessionMgr.Load(req.Context(), "")
+	if err != nil {
+		t.Fatalf("cannot load the session: %v", err)
+	}
+	sessionMgr.Put(ctx, "username", "viewer")
+	req = req.WithContext(ctx)
+
+	handler := AuditMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	line := strings.TrimSpace(output.String())
+	start := strings.Index(line, "{")
+	if start < 0 {
+		t.Fatalf("expected a JSON audit line, got %q", line)
+	}
+	if !strings.Contains(line[start:], `"user":"viewer"`) {
+		t.Fatalf("expected the session username in the audit line, got %s", line[start:])
 	}
 }

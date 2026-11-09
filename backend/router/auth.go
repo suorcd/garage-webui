@@ -312,6 +312,46 @@ type Auth struct {
 	trustedProxies *trustedProxies
 }
 
+type loginCredential struct {
+	username string
+	hash     string
+	role     string
+}
+
+// configuredLogins returns the admin login and the optional read-only
+// login. The admin entry comes first, so a duplicate username resolves
+// to the admin role.
+func configuredLogins() []loginCredential {
+	entries := []struct {
+		env  string
+		role string
+	}{
+		{"AUTH_USER_PASS", "admin"},
+		{"AUTH_READONLY_USER_PASS", "readonly"},
+	}
+
+	result := make([]loginCredential, 0, len(entries))
+	for _, entry := range entries {
+		value := utils.GetEnv(entry.env, "")
+		if value == "" {
+			continue
+		}
+
+		parts := strings.SplitN(value, ":", 2)
+		if len(parts) < 2 || parts[0] == "" || parts[1] == "" {
+			continue
+		}
+
+		result = append(result, loginCredential{
+			username: parts[0],
+			hash:     parts[1],
+			role:     entry.role,
+		})
+	}
+
+	return result
+}
+
 func (c *Auth) Login(w http.ResponseWriter, r *http.Request) {
 	ip := c.clientIP(r)
 
@@ -354,14 +394,22 @@ func (c *Auth) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	userPass := strings.SplitN(utils.GetEnv("AUTH_USER_PASS", ""), ":", 2)
-	if len(userPass) < 2 || userPass[1] == "" {
+	credentials := configuredLogins()
+	if len(credentials) == 0 {
 		utils.ResponseErrorStatus(w, errors.New("AUTH_USER_PASS not set"), http.StatusInternalServerError)
 		return
 	}
 
-	passwordErr := bcrypt.CompareHashAndPassword([]byte(userPass[1]), []byte(body.Password))
-	if strings.TrimSpace(body.Username) != userPass[0] || passwordErr != nil {
+	username := strings.TrimSpace(body.Username)
+	var matched *loginCredential
+	for i := range credentials {
+		if credentials[i].username == username {
+			matched = &credentials[i]
+			break
+		}
+	}
+
+	if matched == nil || bcrypt.CompareHashAndPassword([]byte(matched.hash), []byte(body.Password)) != nil {
 		loginLimits.Fail(key)
 		time.Sleep(loginFailureDelay)
 		utils.ResponseErrorStatus(w, errors.New("invalid username or password"), http.StatusUnauthorized)
@@ -374,8 +422,11 @@ func (c *Auth) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	utils.Session.Set(r, "authenticated", true)
-	utils.ResponseSuccess(w, map[string]bool{
+	utils.Session.Set(r, "username", matched.username)
+	utils.Session.Set(r, "role", matched.role)
+	utils.ResponseSuccess(w, map[string]interface{}{
 		"authenticated": true,
+		"role":          matched.role,
 	})
 }
 
@@ -387,16 +438,32 @@ func (c *Auth) Logout(w http.ResponseWriter, r *http.Request) {
 	utils.ResponseSuccess(w, true)
 }
 
+type authStatus struct {
+	Enabled       bool   `json:"enabled"`
+	Authenticated bool   `json:"authenticated"`
+	Username      string `json:"username,omitempty"`
+	Role          string `json:"role,omitempty"`
+}
+
 func (c *Auth) GetStatus(w http.ResponseWriter, r *http.Request) {
 	enabled := utils.GetEnv("AUTH_USER_PASS", "") != ""
-	isAuthenticated := !enabled
-
-	if authSession := utils.Session.Get(r, "authenticated"); authSession != nil && authSession.(bool) {
-		isAuthenticated = true
+	status := authStatus{
+		Enabled:       enabled,
+		Authenticated: !enabled,
+	}
+	if !enabled {
+		status.Role = "admin"
 	}
 
-	utils.ResponseSuccess(w, map[string]bool{
-		"enabled":       enabled,
-		"authenticated": isAuthenticated,
-	})
+	if authSession, ok := utils.Session.Get(r, "authenticated").(bool); ok && authSession {
+		status.Authenticated = true
+		if role, ok := utils.Session.Get(r, "role").(string); ok {
+			status.Role = role
+		}
+		if username, ok := utils.Session.Get(r, "username").(string); ok {
+			status.Username = username
+		}
+	}
+
+	utils.ResponseSuccess(w, status)
 }

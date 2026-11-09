@@ -5,6 +5,10 @@ import { MemoryRouter } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import appStore from "@/stores/app-store";
 
+const { authState } = vi.hoisted(() => ({
+  authState: { role: undefined as string | undefined },
+}));
+
 vi.mock("@/hooks/useAuth", () => ({
   useAuth: () => ({
     isLoading: false,
@@ -13,6 +17,9 @@ vi.mock("@/hooks/useAuth", () => ({
     refetch: vi.fn(),
     isEnabled: true,
     isAuthenticated: true,
+    username: "admin",
+    role: authState.role,
+    isReadOnly: authState.role === "readonly",
   }),
 }));
 
@@ -39,6 +46,7 @@ describe("Sidebar theme switcher", () => {
   afterEach(() => {
     cleanup();
     appStore.setState({ theme: "suorcd" });
+    authState.role = undefined;
   });
 
   it("offers the theme as a labelled select", () => {
@@ -77,5 +85,12 @@ describe("Sidebar theme switcher", () => {
     expect(screen.getByRole("link", { name: "Cluster" })).toBeTruthy();
     expect(screen.getByRole("link", { name: "Buckets" })).toBeTruthy();
     expect(screen.getByRole("link", { name: "Keys" })).toBeTruthy();
+  });
+
+  it("shows a read-only badge for a read-only role", () => {
+    authState.role = "readonly";
+    renderSidebar();
+
+    expect(screen.getByText("Read-only")).toBeTruthy();
   });
 });
