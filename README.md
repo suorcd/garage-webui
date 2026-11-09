@@ -10,9 +10,10 @@ A simple admin web UI for [Garage](https://garagehq.deuxfleurs.fr/), a self-host
 
 - Garage health status
 - Cluster & layout management
-- Create, update, or view bucket information
-- Integrated objects/bucket browser
-- Create & assign access keys
+- Create, update, or view bucket information (quotas, website access, CORS, and lifecycle rules)
+- Integrated objects/bucket browser (multi-file and folder uploads, presigned download links)
+- Create & assign access keys (including the cluster-wide `createBucket` permission)
+- Optional read-only viewer login and structured JSON audit log for state-changing calls
 
 ## Garage compatibility
 

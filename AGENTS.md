@@ -82,21 +82,25 @@ Frontend:
 - `src/hooks/` - the shared hooks only: `useAuth`, `useConfig`, `useDebounce`.
   A hook that one screen uses belongs in that screen.
 - `src/lib/api.ts` - the only place that sends a request to the Go backend. Request shapes
-  and error handling live here.
+  and error handling live here. `src/lib/disclosure.ts` holds the shared modal disclosure
+  store.
 - `src/context/` - the React context that more than one screen uses.
 - `src/types/garage.ts` - the types for the Garage configuration object.
 
 Backend:
 
 - `backend/router/` - one file for each route group: `auth.go`, `browse.go`, `buckets.go`,
-  `config.go`, `router.go`, and `proxy.go` for the responses that pass through. Add a
-  handler in the file for its area, not in `main.go`.
+  `config.go`, `cors.go`, `health.go`, `keys.go`, `lifecycle.go`, `presign.go`, `router.go`,
+  and `proxy.go` for the responses that pass through. Add a handler in the file for its
+  area, not in `main.go`.
 - `backend/router/proxy.go` - passes other admin responses through without a typed struct.
   The frontend types those responses.
 - `backend/schema/` - the structs that both sides type: `browse.go`, `bucket.go`,
-  `config.go`. Change one of these with the frontend type in the same change.
-- `backend/middleware/`, `backend/utils/` - cross-cutting helpers. `utils/garage.go` holds
-  the Garage client and the admin token.
+  `config.go`, `cors.go`, `key.go`, `lifecycle.go`. Change one of these with the frontend
+  type in the same change.
+- `backend/middleware/`, `backend/utils/` - cross-cutting helpers. `middleware/` holds
+  `auth.go`, `audit.go`, `csrf.go`, and `write_access.go`. `utils/garage.go` holds the
+  Garage client and the admin token.
 - `backend/ui/` - the embedded frontend. `ui.go` is an empty stub in development, and
   Vite serves the UI on port 5173. `ui_prod.go` serves the embedded build, and `pnpm
   build` or the flake fills it.
