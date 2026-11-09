@@ -1,4 +1,4 @@
-import api from "@/lib/api";
+import api, { APIError } from "@/lib/api";
 import {
   useMutation,
   UseMutationOptions,
@@ -10,7 +10,18 @@ import { CreateKeySchema } from "./schema";
 export const useKeys = () => {
   return useQuery({
     queryKey: ["keys"],
-    queryFn: () => api.get<Key[]>("/v2/ListKeysInfo"),
+    queryFn: async () => {
+      try {
+        return await api.get<Key[]>("/v2/ListKeysInfo");
+      } catch (error) {
+        // Garage 2.4 has no ListKeysInfo. Fall back to the key list
+        // without permissions. The createBucket readback needs 2.5.
+        if (error instanceof APIError && error.status === 404) {
+          return api.get<Key[]>("/v2/ListKeys");
+        }
+        throw error;
+      }
+    },
   });
 };
 
