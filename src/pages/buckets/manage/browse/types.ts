@@ -13,9 +13,9 @@ export type GetObjectsResult = {
 };
 
 export type BrowseObject = {
-  objectKey: string;
-  lastModified: Date;
-  size: number;
+  objectKey: string | null;
+  lastModified: string;
+  size: number | null;
   url: string;
 };
 
@@ -36,4 +36,17 @@ export type DeleteObjectsResult = {
   truncated?: boolean;
 };
 
-export type DeleteObjectResult = DeleteObjectsResult | Record<string, unknown>;
+// The single-object delete returns the S3 DeleteObjectOutput unchanged.
+// The SDK fields keep their Go names in the JSON.
+export type DeleteObjectOutput = {
+  DeleteMarker?: boolean | null;
+  RequestCharged?: string;
+  VersionId?: string | null;
+};
+
+export type DeleteObjectResult = DeleteObjectsResult | DeleteObjectOutput;
+
+export const isDeleteObjectsResult = (
+  result: DeleteObjectResult
+): result is DeleteObjectsResult =>
+  "deleted" in result && typeof result.deleted === "number";

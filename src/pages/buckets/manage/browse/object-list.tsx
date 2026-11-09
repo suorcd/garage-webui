@@ -53,7 +53,14 @@ const ObjectList = ({ prefix, onPrefixChange }: Props) => {
 
   const pages = data?.pages ?? [];
   const prefixes = [...new Set(pages.flatMap((page) => page.prefixes))];
-  const objects = pages.flatMap((page) => page.objects);
+  // The backend omits objects without a key. Filter them before the
+  // row code, so every rendered object has a key.
+  const objects = pages
+    .flatMap((page) => page.objects)
+    .filter(
+      (object): object is BrowseObject & { objectKey: string } =>
+        object.objectKey != null
+    );
   const hasData = !!data;
   const lastPageParam =
     data && data.pageParams.length > 0
@@ -236,7 +243,7 @@ const ObjectList = ({ prefix, onPrefixChange }: Props) => {
 
 type FilePreviewProps = {
   ext?: string | null;
-  object: BrowseObject;
+  object: BrowseObject & { objectKey: string };
 };
 
 const FilePreview = ({ ext, object }: FilePreviewProps) => {

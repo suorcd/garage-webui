@@ -18,15 +18,21 @@ const { apiGet, apiPost, revertMutate, layoutData, newLayoutData } =
         { id: "node-a", zone: "dc1", capacity: 5 * 1000 ** 3, tags: ["fast"] },
         { id: "node-c", zone: "dc3", capacity: 3 * 1000 ** 3, tags: ["cold"] },
       ],
+      parameters: { zoneRedundancy: "maximum" },
+      partitionSize: 1024,
       stagedRoleChanges: [
         { id: "node-a", remove: true },
         { id: "node-c", remove: true },
       ],
+      stagedParameters: null,
     } as GetClusterLayoutResult,
     newLayoutData: {
       version: 4,
       roles: [],
+      parameters: { zoneRedundancy: "maximum" },
+      partitionSize: 1024,
       stagedRoleChanges: [],
+      stagedParameters: null,
     },
   }));
 
@@ -69,6 +75,7 @@ const nodes: Node[] = [
     isUp: true,
     lastSeenSecsAgo: 5,
     role: { zone: "DC1", capacity: 5 * GB, tags: ["fast"] },
+    draining: false,
     dataPartition: { available: 0, total: 0 },
   },
   {
@@ -77,6 +84,8 @@ const nodes: Node[] = [
     addr: null,
     isUp: false,
     lastSeenSecsAgo: null,
+    role: null,
+    draining: false,
     dataPartition: { available: 100, total: 1000 },
   },
   {
@@ -85,6 +94,8 @@ const nodes: Node[] = [
     addr: "10.0.0.3:3903",
     isUp: true,
     lastSeenSecsAgo: 2,
+    role: null,
+    draining: false,
     dataPartition: { available: 50, total: 500 },
   },
 ];

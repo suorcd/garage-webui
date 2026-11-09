@@ -33,7 +33,7 @@ const pageOne = {
   objects: [
     {
       objectKey: "obj-0000.txt",
-      lastModified: new Date(),
+      lastModified: new Date().toISOString(),
       size: 1,
       url: "/browse/bucket-b/obj-0000.txt",
     },
@@ -48,7 +48,7 @@ const pageTwo = {
   objects: [
     {
       objectKey: "obj-1000.txt",
-      lastModified: new Date(),
+      lastModified: new Date().toISOString(),
       size: 1,
       url: "/browse/bucket-b/obj-1000.txt",
     },

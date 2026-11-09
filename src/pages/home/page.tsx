@@ -92,7 +92,7 @@ const HomePage = () => {
         <StatsCard
           title="Active Storage Nodes"
           icon={DatabaseZap}
-          value={health?.storageNodesUp}
+          value={health?.storageNodesUp ?? health?.storageNodesOk}
         />
         <StatsCard
           title="Partitions"

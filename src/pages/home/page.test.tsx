@@ -20,7 +20,8 @@ const { healthState, bucketsState } = vi.hoisted(() => ({
       knownNodes: number;
       connectedNodes: number;
       storageNodes: number;
-      storageNodesUp: number;
+      storageNodesUp?: number;
+      storageNodesOk?: number;
       partitions: number;
       partitionsQuorum: number;
       partitionsAllOk: number;
@@ -102,6 +103,20 @@ describe("HomePage", () => {
 
     expect(screen.getByText("Healthy")).toBeTruthy();
     expect(screen.getByText("0.0 B")).toBeTruthy();
+  });
+
+  it("falls back to storageNodesOk on an older cluster", () => {
+    healthState.data = {
+      ...healthState.data!,
+      storageNodesUp: undefined,
+      storageNodesOk: 2,
+    };
+
+    renderPage();
+
+    const title = screen.getByText("Active Storage Nodes");
+    const value = title.parentElement?.querySelector("p");
+    expect(value?.textContent).toBe("2");
   });
 
   it("shows a loading indicator while health loads", () => {

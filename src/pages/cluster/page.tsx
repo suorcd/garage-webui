@@ -23,18 +23,7 @@ const ClusterPage = () => {
   } = useNodeInfo();
   const node = nodeInfo?.node;
 
-  const nodes = useMemo(() => {
-    if (!data) return [];
-
-    if (Array.isArray(data.knownNodes)) {
-      return data.knownNodes.map((node) => ({
-        ...node,
-        role: data.layout?.roles.find((role) => role.id === node.id),
-      }));
-    }
-
-    return data.nodes || [];
-  }, [data]);
+  const nodes = useMemo(() => data?.nodes ?? [], [data]);
 
   return (
     <div className="container">
@@ -65,7 +54,7 @@ const ClusterPage = () => {
               <DetailItem title="DB engine" value={node?.dbEngine} />
               <DetailItem
                 title="Layout version"
-                value={data?.layoutVersion || data?.layout?.version || "-"}
+                value={data?.layoutVersion ?? "-"}
               />
             </>
           )}

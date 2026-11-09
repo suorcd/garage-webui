@@ -10,19 +10,19 @@ const { bucketContext, browseResult, defaultObjects } = vi.hoisted(() => {
       objectKey: "photo.jpg",
       url: "/buckets/bucket-b/objects/photo.jpg",
       size: 1200,
-      lastModified: new Date("2026-01-01"),
+      lastModified: new Date("2026-01-01").toISOString(),
     },
     {
       objectKey: "diagram.webp",
       url: "/buckets/bucket-b/objects/diagram.webp",
       size: 3400,
-      lastModified: new Date("2026-01-02"),
+      lastModified: new Date("2026-01-02").toISOString(),
     },
     {
       objectKey: "scan.avif",
       url: "/buckets/bucket-b/objects/scan.avif",
       size: 5600,
-      lastModified: new Date("2026-01-03"),
+      lastModified: new Date("2026-01-03").toISOString(),
     },
   ];
   return {
@@ -173,7 +173,7 @@ describe("ObjectList object view", () => {
         objectKey: "file.txt",
         url: "/browse/bucket-b/file.txt",
         size: 10,
-        lastModified: new Date("2026-01-01T00:00:00Z"),
+        lastModified: new Date("2026-01-01T00:00:00Z").toISOString(),
       },
     ];
     vi.spyOn(window, "open").mockImplementation(() => null);
@@ -198,7 +198,7 @@ describe("ObjectList object view", () => {
         objectKey: "report#1.pdf",
         url: "/browse/bucket-b/report%231.pdf",
         size: 10,
-        lastModified: new Date("2026-01-01T00:00:00Z"),
+        lastModified: new Date("2026-01-01T00:00:00Z").toISOString(),
       },
     ];
     const user = userEvent.setup();
@@ -226,7 +226,7 @@ describe("ObjectList row keyboard access", () => {
         objectKey: "file.txt",
         url: "/browse/bucket-b/file.txt",
         size: 10,
-        lastModified: new Date("2026-01-01T00:00:00Z"),
+        lastModified: new Date("2026-01-01T00:00:00Z").toISOString(),
       },
     ];
     vi.spyOn(window, "open").mockImplementation(() => null);

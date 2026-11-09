@@ -84,11 +84,15 @@ const NodesList = ({ nodes }: NodeListProps) => {
           (i) => i.id === item.id
         );
         const isRemoval = stagedChanges?.remove === true;
+        const stagedUpdate =
+          stagedChanges && stagedChanges.remove !== true
+            ? stagedChanges
+            : undefined;
         return {
           ...item,
           role: isRemoval
             ? committedRole || item.role
-            : stagedChanges || committedRole || item.role,
+            : stagedUpdate || committedRole || item.role,
           isStaged: !!stagedChanges,
           isRemoval,
         };
