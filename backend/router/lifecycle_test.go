@@ -129,3 +129,33 @@ func TestDeleteBucketLifecycleRemovesRules(t *testing.T) {
 		t.Fatal("the S3 request did not delete the lifecycle rules")
 	}
 }
+
+func TestPutBucketLifecycleRejectsRuleWithoutAction(t *testing.T) {
+	mux := newLifecycleTestMux(t, &fakeLifecycleS3{})
+
+	body := `{"rules":[{"status":"Enabled","filter":{"prefix":"logs/"}}]}`
+	req := httptest.NewRequest(http.MethodPut, "/buckets/test-bucket/lifecycle", strings.NewReader(body))
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected status 400 for a rule without an action, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestPutBucketLifecycleRejectsNonPositiveDays(t *testing.T) {
+	mux := newLifecycleTestMux(t, &fakeLifecycleS3{})
+
+	for _, body := range []string{
+		`{"rules":[{"status":"Enabled","expiration":{"days":0}}]}`,
+		`{"rules":[{"status":"Enabled","abortIncompleteMultipartUpload":{"daysAfterInitiation":0}}]}`,
+	} {
+		req := httptest.NewRequest(http.MethodPut, "/buckets/test-bucket/lifecycle", strings.NewReader(body))
+		rec := httptest.NewRecorder()
+		mux.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusBadRequest {
+			t.Errorf("expected status 400 for %s, got %d: %s", body, rec.Code, rec.Body.String())
+		}
+	}
+}

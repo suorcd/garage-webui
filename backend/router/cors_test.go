@@ -126,3 +126,16 @@ func TestDeleteBucketCORSRemovesRules(t *testing.T) {
 		t.Fatal("the S3 request did not delete the CORS rules")
 	}
 }
+
+func TestPutBucketCORSRejectsUnknownFields(t *testing.T) {
+	mux := newCorsTestMux(t, &fakeCorsS3{})
+
+	body := `{"rules":[{"allowedOrigin":["https://example.com"],"allowedMethods":["GET"]}]}`
+	req := httptest.NewRequest(http.MethodPut, "/buckets/test-bucket/cors", strings.NewReader(body))
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected status 400 for an unknown field, got %d: %s", rec.Code, rec.Body.String())
+	}
+}

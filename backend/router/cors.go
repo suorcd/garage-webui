@@ -79,7 +79,9 @@ func (b *BucketCORS) Get(w http.ResponseWriter, r *http.Request) {
 func (b *BucketCORS) Put(w http.ResponseWriter, r *http.Request) {
 	var request schema.CORSConfiguration
 	body := http.MaxBytesReader(w, r.Body, 64<<10)
-	if err := json.NewDecoder(body).Decode(&request); err != nil {
+	decoder := json.NewDecoder(body)
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&request); err != nil {
 		utils.ResponseErrorStatus(w, fmt.Errorf("invalid JSON body: %w", err), http.StatusBadRequest)
 		return
 	}

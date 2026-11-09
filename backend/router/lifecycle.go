@@ -70,7 +70,14 @@ func lifecycleRulesToS3(rules []schema.LifecycleRule) ([]types.LifecycleRule, er
 			Filter: filter,
 		}
 
+		if entry.Expiration == nil && entry.AbortIncompleteMultipartUpload == nil {
+			return nil, fmt.Errorf("rule %q must set expiration or abortIncompleteMultipartUpload", entry.ID)
+		}
+
 		if entry.Expiration != nil {
+			if entry.Expiration.Days != nil && *entry.Expiration.Days < 1 {
+				return nil, fmt.Errorf("rule %q must set expiration days to at least 1", entry.ID)
+			}
 			expiration := &types.LifecycleExpiration{
 				Days:                      entry.Expiration.Days,
 				ExpiredObjectDeleteMarker: entry.Expiration.ExpiredObjectDeleteMarker,
@@ -86,6 +93,10 @@ func lifecycleRulesToS3(rules []schema.LifecycleRule) ([]types.LifecycleRule, er
 		}
 
 		if entry.AbortIncompleteMultipartUpload != nil {
+			if entry.AbortIncompleteMultipartUpload.DaysAfterInitiation != nil &&
+				*entry.AbortIncompleteMultipartUpload.DaysAfterInitiation < 1 {
+				return nil, fmt.Errorf("rule %q must set daysAfterInitiation to at least 1", entry.ID)
+			}
 			rule.AbortIncompleteMultipartUpload = &types.AbortIncompleteMultipartUpload{
 				DaysAfterInitiation: entry.AbortIncompleteMultipartUpload.DaysAfterInitiation,
 			}
