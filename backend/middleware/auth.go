@@ -21,8 +21,8 @@ func AuthMiddleware(next http.Handler) http.Handler {
 			return
 		}
 
-		auth := utils.Session.Get(r, "authenticated")
-		if auth == nil || !auth.(bool) {
+		auth, ok := utils.Session.Get(r, "authenticated").(bool)
+		if !ok || !auth {
 			utils.ResponseErrorStatus(w, errors.New("unauthorized"), http.StatusUnauthorized)
 			return
 		}
