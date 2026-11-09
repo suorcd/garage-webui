@@ -4,8 +4,12 @@ import {
   UseMutationOptions,
   useQuery,
 } from "@tanstack/react-query";
-import { CreateKeyResponse, Key } from "./types";
+import { CreateKeyResponse, Key, KeyPermissions } from "./types";
 import { CreateKeySchema } from "./schema";
+
+type KeyInfoResponse = {
+  permissions?: KeyPermissions;
+};
 
 export const useKeys = () => {
   return useQuery({
@@ -14,10 +18,27 @@ export const useKeys = () => {
       try {
         return await api.get<Key[]>("/v2/ListKeysInfo");
       } catch (error) {
-        // Garage 2.4 has no ListKeysInfo. Fall back to the key list
-        // without permissions. The createBucket readback needs 2.5.
+        // Garage 2.4 has no ListKeysInfo. Fall back to ListKeys, then
+        // read each key's permissions from GetKeyInfo without the secret.
         if (error instanceof APIError && error.status === 404) {
-          return api.get<Key[]>("/v2/ListKeys");
+          const keys = await api.get<Key[]>("/v2/ListKeys");
+          const details = await Promise.allSettled(
+            keys.map((key) =>
+              api.get<KeyInfoResponse>("/v2/GetKeyInfo", {
+                params: { id: key.id },
+              })
+            )
+          );
+          return keys.map((key, index) => {
+            const entry = details[index];
+            if (
+              entry.status === "fulfilled" &&
+              entry.value?.permissions != null
+            ) {
+              return { ...key, permissions: entry.value.permissions };
+            }
+            return key;
+          });
         }
         throw error;
       }

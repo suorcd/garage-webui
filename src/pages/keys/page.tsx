@@ -235,7 +235,10 @@ const KeysPage = () => {
                       className="checkbox checkbox-sm"
                       aria-label={`Allow key ${key.name} to create buckets`}
                       checked={key.permissions?.createBucket ?? false}
-                      disabled={updateKey.isPending}
+                      disabled={
+                        updateKey.isPending &&
+                        updateKey.variables?.id === key.id
+                      }
                       onChange={(e) =>
                         updateKey.mutate({
                           id: key.id,

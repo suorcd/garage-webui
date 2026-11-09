@@ -12,10 +12,9 @@ Source: the Garage 2.4.1 and 2.5.0 admin API source files. The deployment runs G
 | CORS settings | Yes | Yes |
 | Lifecycle rules | Yes | Yes |
 | Presigned download links | Yes | Yes |
-| Key createBucket readback | No | Yes |
+| Key createBucket readback | Yes (via `GetKeyInfo`) | Yes (via `ListKeysInfo`) |
 
-Garage 2.4.1 has no `ListKeysInfo`. The keys screen falls back to `ListKeys`.
-The createBucket toggle still writes through `UpdateKey`, but the screen cannot show the current value until Garage 2.5.0.
+Garage 2.4.1 has no `ListKeysInfo`. The keys screen falls back to `ListKeys` and reads each key's permissions from `GetKeyInfo`.
 
 ## Admin API routes used by the UI
 
@@ -65,4 +64,4 @@ No admin API route used by the UI was deprecated in 2.5.0.
 ## Decision
 
 Keep the current feature set. Do not add the unused admin routes until a user need and a clear flow exist.
-Garage 2.4.1 stays usable. Garage 2.5.0 is required for the createBucket readback and the richer key list.
+Garage 2.4.1 and 2.5.0 both stay usable. Garage 2.5.0 fetches the key list in one `ListKeysInfo` request.

@@ -16,7 +16,7 @@ A simple admin web UI for [Garage](https://garagehq.deuxfleurs.fr/), a self-host
 
 ## Garage compatibility
 
-The UI supports Garage 2.4.1 and 2.5.0. Garage 2.5.0 is required for the key createBucket readback. See [misc/GARAGE-COMPATIBILITY.md](misc/GARAGE-COMPATIBILITY.md) for the matrix and the decision on unused admin routes.
+The UI supports Garage 2.4.1 and 2.5.0. See [misc/GARAGE-COMPATIBILITY.md](misc/GARAGE-COMPATIBILITY.md) for the matrix and the decision on unused admin routes.
 
 ## Installation
 
