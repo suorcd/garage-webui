@@ -31,6 +31,34 @@ func validateGarageConfig() error {
 	return nil
 }
 
+// validateAuthConfig checks the admin and read-only login values.
+func validateAuthConfig(authUserPass, authReadOnly string, authDisabled bool) error {
+	if authUserPass == "" {
+		if !authDisabled {
+			return errors.New("AUTH_USER_PASS is not set. Set AUTH_USER_PASS, or set AUTH_DISABLED=true for local development.")
+		}
+	} else {
+		parts := strings.SplitN(authUserPass, ":", 2)
+		if len(parts) < 2 || parts[0] == "" || parts[1] == "" {
+			return errors.New("AUTH_USER_PASS must use the format username:password_hash.")
+		}
+	}
+
+	if authReadOnly != "" {
+		parts := strings.SplitN(authReadOnly, ":", 2)
+		if len(parts) < 2 || parts[0] == "" || parts[1] == "" {
+			return errors.New("AUTH_READONLY_USER_PASS must use the format username:password_hash.")
+		}
+
+		adminParts := strings.SplitN(authUserPass, ":", 2)
+		if len(adminParts) == 2 && adminParts[0] == parts[0] {
+			return errors.New("AUTH_READONLY_USER_PASS must use a different username from AUTH_USER_PASS.")
+		}
+	}
+
+	return nil
+}
+
 // hasEndpointHost reports whether the endpoint has a host name. An
 // endpoint built from an empty config is "http://:" and has none.
 func hasEndpointHost(endpoint string) bool {
@@ -92,30 +120,13 @@ func main() {
 	sessionMgr := utils.InitSessionManager()
 
 	authUserPass := utils.GetEnv("AUTH_USER_PASS", "")
-	authDisabled := utils.GetEnv("AUTH_DISABLED", "") == "true"
-	if authUserPass == "" {
-		if !authDisabled {
-			log.Fatal("AUTH_USER_PASS is not set. Set AUTH_USER_PASS, or set AUTH_DISABLED=true for local development.")
-		}
-		log.Println("WARNING: authentication is disabled. Any client can use the admin API.")
-	} else {
-		parts := strings.SplitN(authUserPass, ":", 2)
-		if len(parts) < 2 || parts[1] == "" {
-			log.Fatal("AUTH_USER_PASS must use the format username:password_hash.")
-		}
-	}
-
 	authReadOnly := utils.GetEnv("AUTH_READONLY_USER_PASS", "")
-	if authReadOnly != "" {
-		parts := strings.SplitN(authReadOnly, ":", 2)
-		if len(parts) < 2 || parts[0] == "" || parts[1] == "" {
-			log.Fatal("AUTH_READONLY_USER_PASS must use the format username:password_hash.")
-		}
-
-		adminParts := strings.SplitN(authUserPass, ":", 2)
-		if len(adminParts) == 2 && adminParts[0] == parts[0] {
-			log.Fatal("AUTH_READONLY_USER_PASS must use a different username from AUTH_USER_PASS.")
-		}
+	authDisabled := utils.GetEnv("AUTH_DISABLED", "") == "true"
+	if err := validateAuthConfig(authUserPass, authReadOnly, authDisabled); err != nil {
+		log.Fatal(err)
+	}
+	if authUserPass == "" && authDisabled {
+		log.Println("WARNING: authentication is disabled. Any client can use the admin API.")
 	}
 
 	if err := utils.Garage.LoadConfig(); err != nil {
