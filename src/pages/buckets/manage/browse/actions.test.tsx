@@ -233,6 +233,40 @@ describe("Actions", () => {
     clickSpy.mockRestore();
   });
 
+  it("marks Upload Folder busy and keeps Upload File idle during a folder upload", async () => {
+    let resolveFirst!: (value: unknown) => void;
+    mutateAsyncMock
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            resolveFirst = resolve;
+          })
+      )
+      .mockResolvedValue(undefined);
+    renderActions(true);
+    const files = testFiles(["a.txt"]);
+    Object.defineProperty(files[0], "webkitRelativePath", {
+      value: "photos/a.txt",
+    });
+    const clickSpy = pickFiles(files);
+
+    fireEvent.click(screen.getByTitle("Upload Folder"));
+
+    const uploadFile = screen.getByTitle("Upload File") as HTMLButtonElement;
+    const uploadFolder = screen.getByTitle(
+      "Upload Folder"
+    ) as HTMLButtonElement;
+    await waitFor(() => expect(uploadFolder.disabled).toBe(true));
+    expect(uploadFile.disabled).toBe(true);
+    expect(uploadFolder.getAttribute("aria-busy")).toBe("true");
+    expect(uploadFile.getAttribute("aria-busy")).toBeNull();
+
+    resolveFirst(undefined);
+    await waitFor(() => expect(toastSuccess).toHaveBeenCalledTimes(1));
+    expect(uploadFolder.getAttribute("aria-busy")).toBeNull();
+    clickSpy.mockRestore();
+  });
+
   it("clears the folder name when reopened after cancel", async () => {
     const user = userEvent.setup();
     const { container } = renderActions(true);
