@@ -34,6 +34,9 @@ func HandleApiRouter() http.Handler {
 	router.HandleFunc("PUT /buckets/{bucket}/lifecycle", lifecycle.Put)
 	router.HandleFunc("DELETE /buckets/{bucket}/lifecycle", lifecycle.Delete)
 
+	presign := &BucketPresign{}
+	router.HandleFunc("POST /buckets/{bucket}/presign", presign.Post)
+
 	keys := &Keys{}
 	router.HandleFunc("POST /v2/DeleteKey", keys.Delete)
 	router.HandleFunc("POST /v2/UpdateKey", keys.Update)
