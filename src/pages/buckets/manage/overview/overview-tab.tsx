@@ -5,6 +5,7 @@ import WebsiteAccessSection from "./overview-website-access";
 import AliasesSection from "./overview-aliases";
 import QuotaSection from "./overview-quota";
 import CORSSection from "./overview-cors";
+import LifecycleSection from "./overview-lifecycle";
 import { useBucketContext } from "../context";
 
 const OverviewTab = () => {
@@ -19,6 +20,7 @@ const OverviewTab = () => {
         <WebsiteAccessSection />
         <QuotaSection />
         <CORSSection />
+        <LifecycleSection />
       </Card>
 
       <Card className="card-body order-1 md:order-2">

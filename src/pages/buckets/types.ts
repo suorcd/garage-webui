@@ -59,3 +59,19 @@ export type CORSRule = {
 export type CORSConfiguration = {
   rules: CORSRule[];
 };
+
+export type LifecycleRule = {
+  id?: string;
+  status: "Enabled" | "Disabled";
+  filter?: { prefix?: string };
+  expiration?: {
+    days?: number;
+    date?: string;
+    expiredObjectDeleteMarker?: boolean;
+  };
+  abortIncompleteMultipartUpload?: { daysAfterInitiation?: number };
+};
+
+export type LifecycleConfiguration = {
+  rules: LifecycleRule[];
+};
