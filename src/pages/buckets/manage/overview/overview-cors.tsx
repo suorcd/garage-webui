@@ -12,6 +12,12 @@ const CORSSection = () => {
   const { bucket } = useBucketContext();
   const queryClient = useQueryClient();
   const [text, setText] = useState("");
+  const canRead =
+    bucket.keys?.some((key) => key.permissions.read) ?? false;
+  const canWrite =
+    bucket.keys?.some(
+      (key) => key.permissions.write || key.permissions.owner
+    ) ?? false;
 
   const query = useQuery({
     queryKey: ["bucket-cors", bucket.id],
@@ -19,6 +25,7 @@ const CORSSection = () => {
       api.get<CORSConfiguration>(
         `/buckets/${encodeURIComponent(bucket.id)}/cors`
       ),
+    enabled: canRead,
   });
 
   useEffect(() => {
@@ -67,6 +74,17 @@ const CORSSection = () => {
     }
   };
 
+  if (!canRead) {
+    return (
+      <div className="mt-8 w-full">
+        <p className="font-medium">CORS</p>
+        <p className="text-sm text-base-content/60 mt-1">
+          Grant read access to a key to view CORS rules.
+        </p>
+      </div>
+    );
+  }
+
   return (
     <div className="mt-8 w-full">
       <p className="font-medium">CORS</p>
@@ -83,6 +101,7 @@ const CORSSection = () => {
           className="textarea textarea-bordered w-full h-48 font-mono text-xs mt-2"
           aria-label="CORS rules JSON"
           value={text}
+          readOnly={!canWrite}
           onChange={(event) => setText(event.target.value)}
         />
       )}
@@ -91,14 +110,14 @@ const CORSSection = () => {
         <Button
           color="primary"
           onClick={onSave}
-          disabled={query.isLoading || save.isPending}
+          disabled={!canWrite || query.isLoading || save.isPending}
           loading={save.isPending}
         >
           Save CORS
         </Button>
         <Button
           onClick={onRemove}
-          disabled={query.isLoading || remove.isPending}
+          disabled={!canWrite || query.isLoading || remove.isPending}
           loading={remove.isPending}
         >
           Remove CORS

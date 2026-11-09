@@ -12,6 +12,12 @@ const LifecycleSection = () => {
   const { bucket } = useBucketContext();
   const queryClient = useQueryClient();
   const [text, setText] = useState("");
+  const canRead =
+    bucket.keys?.some((key) => key.permissions.read) ?? false;
+  const canWrite =
+    bucket.keys?.some(
+      (key) => key.permissions.write || key.permissions.owner
+    ) ?? false;
 
   const query = useQuery({
     queryKey: ["bucket-lifecycle", bucket.id],
@@ -19,6 +25,7 @@ const LifecycleSection = () => {
       api.get<LifecycleConfiguration>(
         `/buckets/${encodeURIComponent(bucket.id)}/lifecycle`
       ),
+    enabled: canRead,
   });
 
   useEffect(() => {
@@ -71,6 +78,17 @@ const LifecycleSection = () => {
     }
   };
 
+  if (!canRead) {
+    return (
+      <div className="mt-8 w-full">
+        <p className="font-medium">Lifecycle</p>
+        <p className="text-sm text-base-content/60 mt-1">
+          Grant read access to a key to view lifecycle rules.
+        </p>
+      </div>
+    );
+  }
+
   return (
     <div className="mt-8 w-full">
       <p className="font-medium">Lifecycle</p>
@@ -88,6 +106,7 @@ const LifecycleSection = () => {
           className="textarea textarea-bordered w-full h-48 font-mono text-xs mt-2"
           aria-label="Lifecycle rules JSON"
           value={text}
+          readOnly={!canWrite}
           onChange={(event) => setText(event.target.value)}
         />
       )}
@@ -96,14 +115,14 @@ const LifecycleSection = () => {
         <Button
           color="primary"
           onClick={onSave}
-          disabled={query.isLoading || save.isPending}
+          disabled={!canWrite || query.isLoading || save.isPending}
           loading={save.isPending}
         >
           Save lifecycle
         </Button>
         <Button
           onClick={onRemove}
-          disabled={query.isLoading || remove.isPending}
+          disabled={!canWrite || query.isLoading || remove.isPending}
           loading={remove.isPending}
         >
           Remove lifecycle
