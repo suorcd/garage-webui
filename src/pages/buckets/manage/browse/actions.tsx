@@ -38,11 +38,13 @@ const failedSummary = (failed: FailedUpload[]) => {
 const Actions = ({ prefix, canWrite }: Props) => {
   const { bucket } = useBucketContext();
   const queryClient = useQueryClient();
-  const [uploading, setUploading] = useState(false);
+  const [uploadKind, setUploadKind] = useState<"file" | "folder" | null>(null);
+  const uploading = uploadKind !== null;
 
   const putObject = usePutObject(bucket.id);
 
   const uploadFiles = async (
+    kind: "file" | "folder",
     files: FileList | File[],
     keyFor: (file: File) => string,
     maxFiles?: number
@@ -52,7 +54,7 @@ const Actions = ({ prefix, canWrite }: Props) => {
       return;
     }
 
-    setUploading(true);
+    setUploadKind(kind);
     const failed: FailedUpload[] = [];
     let succeeded = 0;
 
@@ -68,7 +70,7 @@ const Actions = ({ prefix, canWrite }: Props) => {
       }
     }
 
-    setUploading(false);
+    setUploadKind(null);
 
     if (failed.length === 0) {
       toast.success(
@@ -96,6 +98,7 @@ const Actions = ({ prefix, canWrite }: Props) => {
       const files = (e.target as HTMLInputElement).files;
       if (files?.length) {
         void uploadFiles(
+          "file",
           files,
           (file) => prefix + file.name,
           20
@@ -117,6 +120,7 @@ const Actions = ({ prefix, canWrite }: Props) => {
       const files = (e.target as HTMLInputElement).files;
       if (files?.length) {
         void uploadFiles(
+          "folder",
           files,
           (file) => prefix + (file.webkitRelativePath || file.name)
         );
@@ -139,9 +143,10 @@ const Actions = ({ prefix, canWrite }: Props) => {
             : "A key with write access is required to upload objects."
         }
         aria-label="Upload file"
+        aria-busy={uploadKind === "file" ? true : undefined}
         onClick={onUploadFile}
         disabled={!canWrite || uploading}
-        loading={uploading}
+        loading={uploadKind === "file"}
       />
       <Button
         icon={FolderUp}
@@ -152,8 +157,10 @@ const Actions = ({ prefix, canWrite }: Props) => {
             : "A key with write access is required to upload a folder."
         }
         aria-label="Upload folder"
+        aria-busy={uploadKind === "folder" ? true : undefined}
         onClick={onUploadFolder}
         disabled={!canWrite || uploading}
+        loading={uploadKind === "folder"}
       />
     </>
   );
