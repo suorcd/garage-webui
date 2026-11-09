@@ -26,6 +26,7 @@ const CreateKeyDialog = () => {
     resolver: zodResolver(createKeySchema),
     defaultValues: {
       name: "",
+      createBucket: false,
       isImport: false,
       accessKeyId: "",
       secretAccessKey: "",
@@ -91,11 +92,7 @@ const CreateKeyDialog = () => {
   });
 
   const onSubmit = form.handleSubmit((values) => {
-    if (values.isImport) {
-      createKey.mutate(values);
-      return;
-    }
-    createKey.mutate({ name: values.name });
+    createKey.mutate(values);
   });
 
   return (
@@ -127,6 +124,12 @@ const CreateKeyDialog = () => {
 
               <form onSubmit={onSubmit}>
                 <InputField form={form} name="name" title="Key Name" />
+                <CheckboxField
+                  form={form}
+                  name="createBucket"
+                  label="Allow bucket creation (cluster-wide)"
+                  className="mt-2"
+                />
                 <CheckboxField
                   form={form}
                   name="isImport"

@@ -159,7 +159,6 @@ describe("CreateKeyDialog", () => {
     expect(postMock).toHaveBeenCalledWith("/v2/ImportKey", {
       body: {
         name: "my-key",
-        isImport: true,
         accessKeyId: "AKIDEXAMPLE",
         secretAccessKey: "SECRETEXAMPLE",
       },
@@ -195,6 +194,66 @@ describe("CreateKeyDialog", () => {
         (screen.getByRole("button", { name: "Cancel" }) as HTMLButtonElement)
           .disabled
       ).toBe(true)
+    );
+  });
+
+  it("sends the createBucket permission when checked", async () => {
+    const user = userEvent.setup();
+    const { container } = renderDialog();
+    postMock.mockResolvedValue({
+      accessKeyId: "AKIDEXAMPLE",
+      secretAccessKey: "SECRETEXAMPLE",
+      name: "my-key",
+    });
+    await openDialog(user);
+
+    await user.type(inputByName(container, "name"), "my-key");
+    await user.click(
+      screen.getByRole("checkbox", {
+        name: "Allow bucket creation (cluster-wide)",
+      })
+    );
+    await user.click(screen.getByRole("button", { name: "Submit" }));
+
+    await screen.findByText("SECRETEXAMPLE");
+    expect(postMock).toHaveBeenCalledWith("/v2/CreateKey", {
+      body: { name: "my-key", allow: { createBucket: true } },
+    });
+  });
+
+  it("sets the createBucket permission after an import", async () => {
+    const user = userEvent.setup();
+    const { container } = renderDialog();
+    postMock
+      .mockResolvedValueOnce({
+        accessKeyId: "AKIDEXAMPLE",
+        secretAccessKey: "SECRETEXAMPLE",
+        name: "my-key",
+      })
+      .mockResolvedValueOnce({});
+    await openDialog(user);
+
+    await user.type(inputByName(container, "name"), "my-key");
+    await user.click(
+      screen.getByRole("checkbox", { name: "Import existing" })
+    );
+    await user.type(inputByName(container, "accessKeyId"), "AKIDEXAMPLE");
+    await user.type(
+      inputByName(container, "secretAccessKey"),
+      "SECRETEXAMPLE"
+    );
+    await user.click(
+      screen.getByRole("checkbox", {
+        name: "Allow bucket creation (cluster-wide)",
+      })
+    );
+    await user.click(screen.getByRole("button", { name: "Submit" }));
+
+    await waitFor(() =>
+      expect(postMock).toHaveBeenCalledWith("/v2/UpdateKey", {
+        params: { id: "AKIDEXAMPLE" },
+        body: { allow: { createBucket: true } },
+      })
     );
   });
 });

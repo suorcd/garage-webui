@@ -4,16 +4,18 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { PageContextProvider } from "@/context/page-context";
 
-const { keysData } = vi.hoisted(() => ({
+const { keysData, updateMutate } = vi.hoisted(() => ({
   keysData: [
     { id: "abcdef1234567890", name: "MyKey" },
     { id: "1234567890abcdef", name: "other-key" },
   ],
+  updateMutate: vi.fn(),
 }));
 
 vi.mock("./hooks", () => ({
   useKeys: () => ({ data: keysData, refetch: vi.fn() }),
   useRemoveKey: () => ({ mutate: vi.fn() }),
+  useUpdateKey: () => ({ mutate: updateMutate, isPending: false }),
 }));
 
 vi.mock("./components/create-key-dialog", () => ({
@@ -77,5 +79,21 @@ describe("KeysPage", () => {
     expect(
       screen.getByRole("button", { name: "Remove key MyKey" })
     ).toBeTruthy();
+  });
+
+  it("toggles the create-bucket permission", async () => {
+    const user = userEvent.setup();
+    renderPage();
+
+    await user.click(
+      screen.getByRole("checkbox", {
+        name: "Allow key MyKey to create buckets",
+      })
+    );
+
+    expect(updateMutate).toHaveBeenCalledWith({
+      id: "abcdef1234567890",
+      createBucket: true,
+    });
   });
 });
