@@ -112,11 +112,13 @@ func TestBasePathTrailingSlashRoutesAPI(t *testing.T) {
 		t.Fatalf("expected GET /garage/api/auth/status to reach the API, got %d: %s", rec.Code, rec.Body.String())
 	}
 
-	var status map[string]bool
+	var status struct {
+		Authenticated bool `json:"authenticated"`
+	}
 	if err := json.Unmarshal(rec.Body.Bytes(), &status); err != nil {
 		t.Fatalf("cannot decode response: %v", err)
 	}
-	if !status["authenticated"] {
+	if !status.Authenticated {
 		t.Error("expected authenticated true when auth is disabled, got false")
 	}
 }

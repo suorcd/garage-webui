@@ -19,6 +19,13 @@ func newTestAPIHandler() http.Handler {
 	return sessionMgr.LoadAndSave(HandleApiRouter())
 }
 
+type authStatusResponse struct {
+	Enabled       bool   `json:"enabled"`
+	Authenticated bool   `json:"authenticated"`
+	Username      string `json:"username"`
+	Role          string `json:"role"`
+}
+
 func TestAuthMiddlewareRejectsRequestsWhenCredentialsAreUnset(t *testing.T) {
 	t.Setenv("AUTH_USER_PASS", "")
 	t.Setenv("AUTH_DISABLED", "")
@@ -130,16 +137,19 @@ func TestGetStatusReportsAuthenticatedWhenAuthIsDisabled(t *testing.T) {
 		t.Fatalf("expected status 200, got %d: %s", rec.Code, rec.Body.String())
 	}
 
-	var status map[string]bool
+	var status authStatusResponse
 	if err := json.Unmarshal(rec.Body.Bytes(), &status); err != nil {
 		t.Fatalf("cannot decode response: %v", err)
 	}
 
-	if !status["authenticated"] {
+	if !status.Authenticated {
 		t.Error("expected authenticated true when auth is disabled, got false")
 	}
-	if status["enabled"] {
+	if status.Enabled {
 		t.Error("expected enabled false without AUTH_USER_PASS, got true")
+	}
+	if status.Role != "admin" {
+		t.Errorf("expected the admin role when auth is disabled, got %q", status.Role)
 	}
 }
 
@@ -161,15 +171,15 @@ func TestGetStatusReportsUnauthenticatedWhenAuthIsEnabledWithoutSession(t *testi
 		t.Fatalf("expected status 200, got %d: %s", rec.Code, rec.Body.String())
 	}
 
-	var status map[string]bool
+	var status authStatusResponse
 	if err := json.Unmarshal(rec.Body.Bytes(), &status); err != nil {
 		t.Fatalf("cannot decode response: %v", err)
 	}
 
-	if status["authenticated"] {
+	if status.Authenticated {
 		t.Error("expected authenticated false without a session, got true")
 	}
-	if !status["enabled"] {
+	if !status.Enabled {
 		t.Error("expected enabled true with AUTH_USER_PASS set, got false")
 	}
 }
@@ -213,16 +223,22 @@ func TestGetStatusReportsAuthenticatedWithSession(t *testing.T) {
 		t.Fatalf("expected status 200, got %d: %s", rec.Code, rec.Body.String())
 	}
 
-	var status map[string]bool
+	var status authStatusResponse
 	if err := json.Unmarshal(rec.Body.Bytes(), &status); err != nil {
 		t.Fatalf("cannot decode response: %v", err)
 	}
 
-	if !status["authenticated"] {
+	if !status.Authenticated {
 		t.Error("expected authenticated true with a session, got false")
 	}
-	if !status["enabled"] {
+	if !status.Enabled {
 		t.Error("expected enabled true with AUTH_USER_PASS set, got false")
+	}
+	if status.Role != "admin" {
+		t.Errorf("expected the admin role, got %q", status.Role)
+	}
+	if status.Username != "admin" {
+		t.Errorf("expected the admin username, got %q", status.Username)
 	}
 }
 
@@ -815,5 +831,88 @@ func TestLoginHidesSessionRotationFailure(t *testing.T) {
 	}
 	if rec.Body.String() != "cannot rotate the session token" {
 		t.Errorf("expected a generic rotation error, got %q", rec.Body.String())
+	}
+}
+
+func TestLoginReadOnlyRole(t *testing.T) {
+	t.Cleanup(func() { loginLimits.ResetAll() })
+
+	adminHash, err := bcrypt.GenerateFromPassword([]byte("admin-password"), bcrypt.MinCost)
+	if err != nil {
+		t.Fatalf("cannot hash the admin password: %v", err)
+	}
+	viewerHash, err := bcrypt.GenerateFromPassword([]byte("viewer-password"), bcrypt.MinCost)
+	if err != nil {
+		t.Fatalf("cannot hash the viewer password: %v", err)
+	}
+
+	t.Setenv("AUTH_USER_PASS", "admin:"+string(adminHash))
+	t.Setenv("AUTH_READONLY_USER_PASS", "viewer:"+string(viewerHash))
+	t.Setenv("AUTH_DISABLED", "")
+
+	handler := newTestAPIHandler()
+
+	loginReq := httptest.NewRequest(http.MethodPost, "/auth/login", strings.NewReader(`{"username":"viewer","password":"viewer-password"}`))
+	loginReq.Header.Set("Content-Type", "application/json")
+	loginReq.Header.Set("X-Requested-With", "XMLHttpRequest")
+	loginReq.RemoteAddr = "192.0.2.77:1234"
+	loginRec := httptest.NewRecorder()
+	handler.ServeHTTP(loginRec, loginReq)
+
+	if loginRec.Code != http.StatusOK {
+		t.Fatalf("expected login status 200, got %d: %s", loginRec.Code, loginRec.Body.String())
+	}
+
+	cookies := loginRec.Result().Cookies()
+	if len(cookies) == 0 {
+		t.Fatal("expected a session cookie from the viewer login, got none")
+	}
+
+	statusReq := httptest.NewRequest(http.MethodGet, "/auth/status", nil)
+	statusReq.RemoteAddr = "192.0.2.77:1234"
+	for _, cookie := range cookies {
+		statusReq.AddCookie(cookie)
+	}
+	statusRec := httptest.NewRecorder()
+	handler.ServeHTTP(statusRec, statusReq)
+
+	if statusRec.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d: %s", statusRec.Code, statusRec.Body.String())
+	}
+
+	var status authStatusResponse
+	if err := json.Unmarshal(statusRec.Body.Bytes(), &status); err != nil {
+		t.Fatalf("cannot decode status: %v", err)
+	}
+	if !status.Authenticated || status.Role != "readonly" || status.Username != "viewer" {
+		t.Fatalf("unexpected viewer status: %+v", status)
+	}
+
+	mutationReq := httptest.NewRequest(http.MethodPost, "/v2/DeleteKey", strings.NewReader(`{"id":"key-1"}`))
+	mutationReq.Header.Set("X-Requested-With", "XMLHttpRequest")
+	mutationReq.RemoteAddr = "192.0.2.77:1234"
+	for _, cookie := range cookies {
+		mutationReq.AddCookie(cookie)
+	}
+	mutationRec := httptest.NewRecorder()
+	handler.ServeHTTP(mutationRec, mutationReq)
+
+	if mutationRec.Code != http.StatusForbidden {
+		t.Fatalf("expected a read-only mutation to return 403, got %d: %s", mutationRec.Code, mutationRec.Body.String())
+	}
+	if !strings.Contains(mutationRec.Body.String(), "read-only user") {
+		t.Errorf("expected the read-only error, got %q", mutationRec.Body.String())
+	}
+
+	readReq := httptest.NewRequest(http.MethodGet, "/config", nil)
+	readReq.RemoteAddr = "192.0.2.77:1234"
+	for _, cookie := range cookies {
+		readReq.AddCookie(cookie)
+	}
+	readRec := httptest.NewRecorder()
+	handler.ServeHTTP(readRec, readReq)
+
+	if readRec.Code != http.StatusOK {
+		t.Fatalf("expected a read-only GET to return 200, got %d: %s", readRec.Code, readRec.Body.String())
 	}
 }

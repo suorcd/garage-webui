@@ -35,10 +35,14 @@ func (w *statusWriter) Write(body []byte) (int, error) {
 	return w.ResponseWriter.Write(body)
 }
 
-// auditUser returns the configured login name. The server has one shared
-// login today. When the server gains several users, read the name from
-// the session instead.
-func auditUser() string {
+// auditUser returns the login name from the session. An auth-disabled
+// server logs anonymous. A session from before the username existed
+// falls back to the configured admin login.
+func auditUser(r *http.Request) string {
+	if name, ok := utils.Session.Get(r, "username").(string); ok && name != "" {
+		return name
+	}
+
 	if utils.GetEnv("AUTH_DISABLED", "") == "true" {
 		return "anonymous"
 	}
@@ -73,7 +77,7 @@ func AuditMiddleware(next http.Handler) http.Handler {
 
 		event := auditEvent{
 			Time:   time.Now().UTC().Format(time.RFC3339),
-			User:   auditUser(),
+			User:   auditUser(r),
 			Method: r.Method,
 			Path:   r.URL.Path,
 			Status: status,

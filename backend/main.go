@@ -105,6 +105,19 @@ func main() {
 		}
 	}
 
+	authReadOnly := utils.GetEnv("AUTH_READONLY_USER_PASS", "")
+	if authReadOnly != "" {
+		parts := strings.SplitN(authReadOnly, ":", 2)
+		if len(parts) < 2 || parts[0] == "" || parts[1] == "" {
+			log.Fatal("AUTH_READONLY_USER_PASS must use the format username:password_hash.")
+		}
+
+		adminParts := strings.SplitN(authUserPass, ":", 2)
+		if len(adminParts) == 2 && adminParts[0] == parts[0] {
+			log.Fatal("AUTH_READONLY_USER_PASS must use a different username from AUTH_USER_PASS.")
+		}
+	}
+
 	if err := utils.Garage.LoadConfig(); err != nil {
 		if os.IsNotExist(err) {
 			// A missing file is not fatal: an env-only deployment has no file.

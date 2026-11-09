@@ -193,6 +193,7 @@ Configurable envs:
 - `MAX_UPLOAD_SIZE`: Maximum upload size in bytes. Defaults to 5368709120 (5 GiB). The backend streams the upload to S3 and does not use a temporary file.
 - `MAX_THUMBNAIL_SIZE`: Maximum image size in bytes for thumbnail generation. Defaults to 5242880 (5 MiB). Larger images show a placeholder.
 - `AUTH_USER_PASS`: The login in `username:password_hash` format. The server refuses to start when this value is empty, unless `AUTH_DISABLED=true`.
+- `AUTH_READONLY_USER_PASS`: An optional read-only login in `username:password_hash` format. It can call GET endpoints only. Use a username that differs from `AUTH_USER_PASS`.
 - `AUTH_DISABLED`: Set to `true` to disable authentication for local development. The server logs a warning. Do not use this value in production.
 - `TRUSTED_PROXIES`: IPs and CIDRs of trusted proxies, comma separated. Only these proxies may set `X-Forwarded-For` and `X-Real-IP`. Empty means no proxy is trusted.
 - `SESSION_COOKIE_SECURE`: Set to `false` for a plain HTTP install. Defaults to `true`. A browser drops a Secure cookie over plain HTTP, and login never sticks.
@@ -206,6 +207,8 @@ Each Garage admin API call has a 30 second timeout. Mutating calls use a 3 minut
 ### Authentication
 
 Authentication is required. Set the `AUTH_USER_PASS` environment variable in the format `username:password_hash`, where `password_hash` is a bcrypt hash of the password.
+
+A read-only login is optional. Set `AUTH_READONLY_USER_PASS` in the same format. A read-only user can call GET endpoints. The server rejects a state-changing request from that user with 403. Use a username that differs from `AUTH_USER_PASS`.
 
 The server writes one JSON audit line for each state-changing API request. The line holds the user, method, path, status, and time. The server writes the line to standard output.
 
