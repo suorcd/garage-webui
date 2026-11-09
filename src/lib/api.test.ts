@@ -303,6 +303,49 @@ describe("api 401 redirect", () => {
 
 });
 
+describe("api Retry-After", () => {
+  it("carries the Retry-After seconds on a 429", async () => {
+    const response = new Response("too many", {
+      status: 429,
+      headers: {
+        "Content-Type": "text/plain",
+        "Retry-After": "30",
+      },
+    });
+    stubFetch(response);
+
+    const error = await apiError(api.post("/auth/login", { body: {} }));
+
+    expect(error.status).toBe(429);
+    expect(error.retryAfter).toBe(30);
+  });
+
+  it("parses an HTTP date Retry-After as seconds", async () => {
+    const retryAt = new Date(Date.now() + 60_000).toUTCString();
+    const response = new Response("too many", {
+      status: 429,
+      headers: {
+        "Content-Type": "text/plain",
+        "Retry-After": retryAt,
+      },
+    });
+    stubFetch(response);
+
+    const error = await apiError(api.post("/auth/login", { body: {} }));
+
+    expect(error.retryAfter).toBeGreaterThanOrEqual(58);
+    expect(error.retryAfter).toBeLessThanOrEqual(60);
+  });
+
+  it("leaves retryAfter undefined without the header", async () => {
+    stubFetch(textResponse("too many", 429));
+
+    const error = await apiError(api.post("/auth/login", { body: {} }));
+
+    expect(error.retryAfter).toBeUndefined();
+  });
+});
+
 describe("api body read deadline", () => {
   it("surfaces a deadline that fires while the body is read", async () => {
     const stalled = {
