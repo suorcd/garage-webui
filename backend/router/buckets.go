@@ -80,6 +80,56 @@ func (b *Buckets) DenyKey(w http.ResponseWriter, r *http.Request) {
 	writeGarageResponse(w, body)
 }
 
+func (b *Buckets) mutateAlias(w http.ResponseWriter, r *http.Request, endpoint string) {
+	var request json.RawMessage
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 64<<10)).Decode(&request); err != nil {
+		utils.ResponseErrorStatus(w, err, http.StatusBadRequest)
+		return
+	}
+
+	body, err := utils.Garage.Fetch(endpoint, &utils.FetchOptions{
+		Method:  http.MethodPost,
+		Body:    request,
+		Timeout: utils.MutationTimeout,
+	})
+	if err != nil {
+		utils.ResponseError(w, err)
+		return
+	}
+
+	utils.Cache.ClearPrefix("key:")
+	writeGarageResponse(w, body)
+}
+
+func (b *Buckets) AddAlias(w http.ResponseWriter, r *http.Request) {
+	b.mutateAlias(w, r, "/v2/AddBucketAlias")
+}
+
+func (b *Buckets) RemoveAlias(w http.ResponseWriter, r *http.Request) {
+	b.mutateAlias(w, r, "/v2/RemoveBucketAlias")
+}
+
+func (b *Buckets) Delete(w http.ResponseWriter, r *http.Request) {
+	id := r.URL.Query().Get("id")
+	if id == "" {
+		utils.ResponseErrorStatus(w, errors.New("id is required"), http.StatusBadRequest)
+		return
+	}
+
+	body, err := utils.Garage.Fetch("/v2/DeleteBucket", &utils.FetchOptions{
+		Method:  http.MethodPost,
+		Params:  map[string]string{"id": id},
+		Timeout: utils.MutationTimeout,
+	})
+	if err != nil {
+		utils.ResponseError(w, err)
+		return
+	}
+
+	utils.Cache.ClearPrefix("key:")
+	writeGarageResponse(w, body)
+}
+
 func writeGarageResponse(w http.ResponseWriter, body []byte) {
 	var result interface{}
 	if len(body) > 0 {

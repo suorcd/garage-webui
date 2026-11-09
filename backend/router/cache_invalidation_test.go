@@ -134,6 +134,20 @@ func TestKeyMutationsClearCredentialCache(t *testing.T) {
 			path: "/v2/UpdateKey?id=key-a",
 			body: `{}`,
 		},
+		{
+			name: "add-alias",
+			path: "/v2/AddBucketAlias",
+			body: `{"bucketId":"bucket-1","globalAlias":"alias-a"}`,
+		},
+		{
+			name: "remove-alias",
+			path: "/v2/RemoveBucketAlias",
+			body: `{"bucketId":"bucket-1","globalAlias":"alias-a"}`,
+		},
+		{
+			name: "delete-bucket",
+			path: "/v2/DeleteBucket?id=bucket-1",
+		},
 	}
 
 	for _, testCase := range cases {

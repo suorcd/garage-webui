@@ -16,7 +16,12 @@ vi.mock("sonner", () => ({
   toast: { success: vi.fn(), error: vi.fn(), warning: toastWarning },
 }));
 
-import { useAllowKey } from "./hooks";
+import {
+  useAddAlias,
+  useAllowKey,
+  useRemoveAlias,
+  useRemoveBucket,
+} from "./hooks";
 
 const read = { read: true, write: false, owner: false };
 
@@ -128,5 +133,65 @@ describe("useAllowKey", () => {
     await expect(result.current.mutateAsync([])).rejects.toThrow(
       "Select at least one key and permission."
     );
+  });
+});
+
+describe("bucket list invalidation", () => {
+  beforeEach(() => {
+    apiPost.mockReset();
+    apiPost.mockResolvedValue({});
+  });
+
+  const makeWrapper = () => {
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    const invalidateSpy = vi.spyOn(queryClient, "invalidateQueries");
+    const wrapper = ({ children }: { children: ReactNode }) => (
+      <QueryClientProvider client={queryClient}>
+        {children}
+      </QueryClientProvider>
+    );
+    return { invalidateSpy, wrapper };
+  };
+
+  it("invalidates the buckets list when an alias is added", async () => {
+    const { invalidateSpy, wrapper } = makeWrapper();
+    const onSuccess = vi.fn();
+    const { result } = renderHook(() => useAddAlias("bucket-1", { onSuccess }), {
+      wrapper,
+    });
+
+    await result.current.mutateAsync("new-alias");
+
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ["buckets"] });
+    expect(onSuccess).toHaveBeenCalledTimes(1);
+  });
+
+  it("invalidates the buckets list when an alias is removed", async () => {
+    const { invalidateSpy, wrapper } = makeWrapper();
+    const onSuccess = vi.fn();
+    const { result } = renderHook(
+      () => useRemoveAlias("bucket-1", { onSuccess }),
+      { wrapper }
+    );
+
+    await result.current.mutateAsync("old-alias");
+
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ["buckets"] });
+    expect(onSuccess).toHaveBeenCalledTimes(1);
+  });
+
+  it("invalidates the buckets list when a bucket is removed", async () => {
+    const { invalidateSpy, wrapper } = makeWrapper();
+    const onSuccess = vi.fn();
+    const { result } = renderHook(() => useRemoveBucket({ onSuccess }), {
+      wrapper,
+    });
+
+    await result.current.mutateAsync("bucket-1");
+
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ["buckets"] });
+    expect(onSuccess).toHaveBeenCalledTimes(1);
   });
 });

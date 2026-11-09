@@ -57,13 +57,18 @@ export const useAddAlias = (
   bucketId?: string | null,
   options?: UseMutationOptions<unknown, Error, string>
 ) => {
+  const queryClient = useQueryClient();
   return useMutation({
+    ...options,
     mutationFn: (alias: string) => {
       return api.post("/v2/AddBucketAlias", {
         body: { bucketId, globalAlias: alias },
       });
     },
-    ...options,
+    onSuccess: (data, variables, context) => {
+      queryClient.invalidateQueries({ queryKey: ["buckets"] });
+      options?.onSuccess?.(data, variables, context);
+    },
   });
 };
 
@@ -71,13 +76,18 @@ export const useRemoveAlias = (
   bucketId?: string | null,
   options?: UseMutationOptions<unknown, Error, string>
 ) => {
+  const queryClient = useQueryClient();
   return useMutation({
+    ...options,
     mutationFn: (alias: string) => {
       return api.post("/v2/RemoveBucketAlias", {
         body: { bucketId, globalAlias: alias },
       });
     },
-    ...options,
+    onSuccess: (data, variables, context) => {
+      queryClient.invalidateQueries({ queryKey: ["buckets"] });
+      options?.onSuccess?.(data, variables, context);
+    },
   });
 };
 
@@ -183,8 +193,13 @@ export const useDenyKey = (
 export const useRemoveBucket = (
   options?: MutationOptions<unknown, Error, string>
 ) => {
+  const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (id) => api.post("/v2/DeleteBucket", { params: { id } }),
     ...options,
+    mutationFn: (id) => api.post("/v2/DeleteBucket", { params: { id } }),
+    onSuccess: (data, variables, context) => {
+      queryClient.invalidateQueries({ queryKey: ["buckets"] });
+      options?.onSuccess?.(data, variables, context);
+    },
   });
 };
