@@ -207,6 +207,8 @@ Each Garage admin API call has a 30 second timeout. Mutating calls use a 3 minut
 
 Authentication is required. Set the `AUTH_USER_PASS` environment variable in the format `username:password_hash`, where `password_hash` is a bcrypt hash of the password.
 
+The server writes one JSON audit line for each state-changing API request. The line holds the user, method, path, status, and time. The server writes the line to standard output.
+
 Generate the username and password hash using the following command:
 
 ```bash
