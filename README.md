@@ -194,6 +194,7 @@ Configurable envs:
 - `API_ADMIN_KEY`: Admin API key. Without this value, the server uses the `admin_token` from `garage.toml`.
 - `S3_REGION`: S3 Region. Without this value, the server uses the `s3_region` from `garage.toml`, or `garage` when the file has none.
 - `S3_ENDPOINT_URL`: S3 Endpoint URL. Without this value, the server derives the endpoint from `garage.toml`.
+- `S3_PUBLIC_ENDPOINT_URL`: Optional browser-reachable S3 Endpoint URL used to sign presigned download links. Defaults to `S3_ENDPOINT_URL`.
 - `MAX_UPLOAD_SIZE`: Maximum upload size in bytes. Defaults to 5368709120 (5 GiB). The backend streams the upload to S3 and does not use a temporary file.
 - `MAX_THUMBNAIL_SIZE`: Maximum image size in bytes for thumbnail generation. Defaults to 5242880 (5 MiB). Larger images show a placeholder.
 - `AUTH_USER_PASS`: The login in `username:password_hash` format. The server refuses to start when this value is empty, unless `AUTH_DISABLED=true`.

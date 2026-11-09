@@ -39,7 +39,12 @@ func (b *BucketPresign) Post(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	client, access, err := getS3Client(r.Context(), r.PathValue("bucket"), false)
+	client, access, err := getS3ClientForEndpoint(
+		r.Context(),
+		r.PathValue("bucket"),
+		false,
+		utils.Garage.GetS3PublicEndpoint(),
+	)
 	if err != nil {
 		utils.ResponseError(w, err)
 		return
