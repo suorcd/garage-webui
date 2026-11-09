@@ -36,10 +36,14 @@ function wrapper({ children }: { children: ReactNode }) {
 }
 
 describe("useKeys", () => {
-  it("falls back to ListKeys when ListKeysInfo is missing", async () => {
+  it("falls back to ListKeys and loads permissions from GetKeyInfo when ListKeysInfo is missing", async () => {
     apiGet
       .mockRejectedValueOnce(new APIError("not found", 404))
-      .mockResolvedValueOnce([{ id: "key-1", name: "first" }]);
+      .mockResolvedValueOnce([{ id: "key-1", name: "first" }])
+      .mockResolvedValueOnce({
+        accessKeyId: "key-1",
+        permissions: { createBucket: true },
+      });
 
     const { result } = renderHook(() => useKeys(), { wrapper });
 
@@ -47,7 +51,16 @@ describe("useKeys", () => {
 
     expect(apiGet).toHaveBeenNthCalledWith(1, "/v2/ListKeysInfo");
     expect(apiGet).toHaveBeenNthCalledWith(2, "/v2/ListKeys");
-    expect(result.current.data).toEqual([{ id: "key-1", name: "first" }]);
+    expect(apiGet).toHaveBeenNthCalledWith(3, "/v2/GetKeyInfo", {
+      params: { id: "key-1" },
+    });
+    expect(result.current.data).toEqual([
+      {
+        id: "key-1",
+        name: "first",
+        permissions: { createBucket: true },
+      },
+    ]);
   });
 
   it("does not fall back for another error", async () => {

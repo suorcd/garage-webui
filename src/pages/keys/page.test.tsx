@@ -4,18 +4,26 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { PageContextProvider } from "@/context/page-context";
 
-const { keysData, updateMutate } = vi.hoisted(() => ({
+const { keysData, updateMutate, updateState } = vi.hoisted(() => ({
   keysData: [
     { id: "abcdef1234567890", name: "MyKey" },
     { id: "1234567890abcdef", name: "other-key" },
   ],
   updateMutate: vi.fn(),
+  updateState: {
+    isPending: false,
+    variables: undefined as { id: string; createBucket: boolean } | undefined,
+  },
 }));
 
 vi.mock("./hooks", () => ({
   useKeys: () => ({ data: keysData, refetch: vi.fn() }),
   useRemoveKey: () => ({ mutate: vi.fn() }),
-  useUpdateKey: () => ({ mutate: updateMutate, isPending: false }),
+  useUpdateKey: () => ({
+    mutate: updateMutate,
+    isPending: updateState.isPending,
+    variables: updateState.variables,
+  }),
 }));
 
 vi.mock("./components/create-key-dialog", () => ({
@@ -42,7 +50,11 @@ function renderPage() {
 }
 
 describe("KeysPage", () => {
-  afterEach(cleanup);
+  afterEach(() => {
+    cleanup();
+    updateState.isPending = false;
+    updateState.variables = undefined;
+  });
 
   it("matches a key name regardless of case", async () => {
     const user = userEvent.setup();
@@ -95,5 +107,21 @@ describe("KeysPage", () => {
       id: "abcdef1234567890",
       createBucket: true,
     });
+  });
+
+  it("disables only the key row being updated", () => {
+    updateState.isPending = true;
+    updateState.variables = { id: "abcdef1234567890", createBucket: true };
+    renderPage();
+
+    const first = screen.getByRole("checkbox", {
+      name: "Allow key MyKey to create buckets",
+    }) as HTMLInputElement;
+    const second = screen.getByRole("checkbox", {
+      name: "Allow key other-key to create buckets",
+    }) as HTMLInputElement;
+
+    expect(first.disabled).toBe(true);
+    expect(second.disabled).toBe(false);
   });
 });
