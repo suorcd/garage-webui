@@ -22,6 +22,7 @@ const { keysState, removeMutate } = vi.hoisted(() => ({
 vi.mock("./hooks", () => ({
   useKeys: () => keysState,
   useRemoveKey: () => ({ mutate: removeMutate, isPending: false }),
+  useUpdateKey: () => ({ mutate: vi.fn(), isPending: false }),
 }));
 
 vi.mock("./components/create-key-dialog", () => ({

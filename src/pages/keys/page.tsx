@@ -2,7 +2,7 @@ import Button from "@/components/ui/button";
 import Page from "@/context/page-context";
 import { Copy, CircleXIcon, Eye, EyeOff, Trash } from "lucide-react";
 import { Alert, Badge, Card, Input, Table } from "react-daisyui";
-import { useKeys, useRemoveKey } from "./hooks";
+import { useKeys, useRemoveKey, useUpdateKey } from "./hooks";
 import CreateKeyDialog from "./components/create-key-dialog";
 import { toast } from "sonner";
 import { copyToClipboard, dayjs, formatExpiryDate, handleError } from "@/lib/utils";
@@ -51,6 +51,14 @@ const KeysPage = () => {
       });
       refetch();
       toast.success("Key removed!");
+    },
+    onError: handleError,
+  });
+
+  const updateKey = useUpdateKey({
+    onSuccess: () => {
+      refetch();
+      toast.success("Key updated!");
     },
     onError: handleError,
   });
@@ -137,19 +145,20 @@ const KeysPage = () => {
               <span>Key ID</span>
               <span>Expiry</span>
               <span>Secret Key</span>
+              <span>Create Buckets</span>
               <span />
             </Table.Head>
 
             <Table.Body>
               {isLoading ? (
                 <tr>
-                  <td colSpan={6}>
+                  <td colSpan={7}>
                     <PageLoading />
                   </td>
                 </tr>
               ) : !isError && !items?.length ? (
                 <tr>
-                  <td colSpan={6} className="text-center py-16">
+                  <td colSpan={7} className="text-center py-16">
                     {search ? `No matches for "${search}"` : "No keys yet"}
                   </td>
                 </tr>
@@ -219,6 +228,22 @@ const KeysPage = () => {
                       </Button>
                     </div>
                   )}
+
+                  <span>
+                    <input
+                      type="checkbox"
+                      className="checkbox checkbox-sm"
+                      aria-label={`Allow key ${key.name} to create buckets`}
+                      checked={key.permissions?.createBucket ?? false}
+                      disabled={updateKey.isPending}
+                      onChange={(e) =>
+                        updateKey.mutate({
+                          id: key.id,
+                          createBucket: e.target.checked,
+                        })
+                      }
+                    />
+                  </span>
 
                   <span>
                     <Button

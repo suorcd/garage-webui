@@ -55,6 +55,7 @@ const { keysData, mockApiGet, mockRefetch } = vi.hoisted(() => {
 
 vi.mock("./hooks", () => ({
   useKeys: () => ({ data: keysData, refetch: mockRefetch }),
+  useUpdateKey: () => ({ mutate: vi.fn(), isPending: false }),
   useRemoveKey: (options: {
     onSuccess?: (data: unknown, id: string) => void;
     onError?: (err: unknown) => void;

@@ -10,7 +10,7 @@ import { CreateKeySchema } from "./schema";
 export const useKeys = () => {
   return useQuery({
     queryKey: ["keys"],
-    queryFn: () => api.get<Key[]>("/v2/ListKeys"),
+    queryFn: () => api.get<Key[]>("/v2/ListKeysInfo"),
   });
 };
 
@@ -19,11 +19,54 @@ export const useCreateKey = (
 ) => {
   return useMutation({
     mutationFn: async (body) => {
+      const permission = body.createBucket
+        ? { createBucket: true }
+        : undefined;
+
       if (body.isImport) {
-        return api.post("/v2/ImportKey", { body });
+        const imported = await api.post<CreateKeyResponse>("/v2/ImportKey", {
+          body: {
+            accessKeyId: body.accessKeyId,
+            secretAccessKey: body.secretAccessKey,
+            name: body.name,
+          },
+        });
+        if (permission && imported.accessKeyId) {
+          await api.post("/v2/UpdateKey", {
+            params: { id: imported.accessKeyId },
+            body: { allow: permission },
+          });
+        }
+        return imported;
       }
-      return api.post("/v2/CreateKey", { body });
+
+      return api.post<CreateKeyResponse>("/v2/CreateKey", {
+        body: {
+          name: body.name,
+          ...(permission ? { allow: permission } : {}),
+        },
+      });
     },
+    ...options,
+  });
+};
+
+export type UpdateKeyPayload = {
+  id: string;
+  createBucket: boolean;
+};
+
+export const useUpdateKey = (
+  options?: UseMutationOptions<unknown, Error, UpdateKeyPayload>
+) => {
+  return useMutation({
+    mutationFn: ({ id, createBucket }) =>
+      api.post("/v2/UpdateKey", {
+        params: { id },
+        body: createBucket
+          ? { allow: { createBucket: true } }
+          : { deny: { createBucket: true } },
+      }),
     ...options,
   });
 };

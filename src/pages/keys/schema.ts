@@ -6,6 +6,7 @@ export const createKeySchema = z
       .string()
       .min(1, "Key Name is required")
       .regex(/^[a-zA-Z0-9_-]+$/, "Key Name invalid"),
+    createBucket: z.boolean().default(false),
     isImport: z.boolean().nullish(),
     accessKeyId: z.string().nullish(),
     secretAccessKey: z.string().nullish(),
