@@ -49,7 +49,7 @@
             inherit version src;
             pnpm = pkgs.pnpm_10;
             fetcherVersion = 5;
-            hash = "sha256-PrzKAigyk+TTBCDhEdaCCiWZ51ocQQYloSjTAmhuWWM=";
+            hash = "sha256-7dx6xNeH7hFgFlAQW/tUYj+rLtC418RjaewHazSUc7U=";
           };
 
           buildPhase = ''
