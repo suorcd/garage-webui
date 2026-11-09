@@ -921,13 +921,16 @@ func getS3BucketName(bucket *schema.Bucket, key *schema.KeyElement) (string, err
 }
 
 func getS3Client(ctx context.Context, identifier string, needWrite bool) (*s3.Client, *bucketAccess, error) {
+	return getS3ClientForEndpoint(ctx, identifier, needWrite, utils.Garage.GetS3Endpoint())
+}
+
+func getS3ClientForEndpoint(ctx context.Context, identifier string, needWrite bool, endpoint string) (*s3.Client, *bucketAccess, error) {
 	access, err := getBucketAccess(ctx, identifier, needWrite)
 	if err != nil {
 		return nil, nil, fmt.Errorf("cannot use bucket %s: %w", identifier, err)
 	}
 
 	// Determine endpoint and whether to disable HTTPS
-	endpoint := utils.Garage.GetS3Endpoint()
 	disableHTTPS := !strings.HasPrefix(endpoint, "https://")
 
 	// AWS config without BaseEndpoint

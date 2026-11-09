@@ -54,6 +54,26 @@ func TestPresignBucketObjectReturnsURL(t *testing.T) {
 	}
 }
 
+func TestPresignBucketObjectUsesPublicS3Endpoint(t *testing.T) {
+	mux := newPresignTestMux(t)
+	t.Setenv("S3_ENDPOINT_URL", "http://garage:3900")
+	t.Setenv("S3_PUBLIC_ENDPOINT_URL", "https://s3.example.com/")
+
+	body := `{"key":"photos/a.txt","expiresSeconds":3600}`
+	req := httptest.NewRequest(http.MethodPost, "/buckets/test-bucket/presign", strings.NewReader(body))
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	response := rec.Body.String()
+	want := "https://s3.example.com/test-bucket/photos/a.txt"
+	if !strings.Contains(response, want) {
+		t.Fatalf("expected the presigned URL to use %q, got %s", want, response)
+	}
+}
+
 func TestPresignBucketObjectRejectsInvalidExpiry(t *testing.T) {
 	mux := newPresignTestMux(t)
 

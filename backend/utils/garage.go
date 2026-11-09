@@ -89,6 +89,14 @@ func (g *garage) GetS3Endpoint() string {
 	return trimEndpoint(endpoint)
 }
 
+func (g *garage) GetS3PublicEndpoint() string {
+	endpoint := os.Getenv("S3_PUBLIC_ENDPOINT_URL")
+	if len(endpoint) > 0 {
+		return trimEndpoint(endpoint)
+	}
+	return g.GetS3Endpoint()
+}
+
 func (g *garage) GetS3Region() string {
 	endpoint := os.Getenv("S3_REGION")
 	if len(endpoint) > 0 {
