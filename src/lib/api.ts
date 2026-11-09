@@ -42,12 +42,35 @@ const UPLOAD_TIMEOUT_MS = 600_000;
 
 export class APIError extends Error {
   status!: number;
+  retryAfter?: number;
 
-  constructor(message: string, status: number = 400) {
+  constructor(message: string, status: number = 400, retryAfter?: number) {
     super(message);
     this.name = "APIError";
     this.status = status;
+    this.retryAfter = retryAfter;
   }
+}
+
+// Retry-After is either a number of seconds or an HTTP date. Return the
+// number of seconds to wait, or undefined when the value is absent or
+// invalid.
+function parseRetryAfter(value: string | null): number | undefined {
+  if (value === null || value.trim() === "") {
+    return undefined;
+  }
+
+  const seconds = Number(value);
+  if (Number.isFinite(seconds) && seconds >= 0) {
+    return seconds;
+  }
+
+  const date = Date.parse(value);
+  if (Number.isNaN(date)) {
+    return undefined;
+  }
+
+  return Math.max(0, Math.ceil((date - Date.now()) / 1000));
 }
 
 // The 401 redirect is a full page load, so the current path must travel
@@ -145,11 +168,19 @@ const api = {
 
     if (res.status === 401 && !url.startsWith("/auth")) {
       window.location.href = utils.url("/auth/login") + loginReturnToQuery();
-      throw new APIError("unauthorized", res.status);
+      throw new APIError(
+        "unauthorized",
+        res.status,
+        parseRetryAfter(res.headers.get("Retry-After"))
+      );
     }
 
     if (!res.ok) {
-      throw new APIError(errorMessage(data, res), res.status);
+      throw new APIError(
+        errorMessage(data, res),
+        res.status,
+        parseRetryAfter(res.headers.get("Retry-After"))
+      );
     }
 
     return data as unknown as T;

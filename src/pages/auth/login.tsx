@@ -7,6 +7,8 @@ import { InputField } from "@/components/ui/input";
 import { useLogin } from "./hooks";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { parseReturnTo } from "@/lib/utils";
+import { APIError } from "@/lib/api";
+import { useEffect, useState } from "react";
 
 export default function LoginPage() {
   const form = useForm({
@@ -16,14 +18,47 @@ export default function LoginPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const returnTo = parseReturnTo(searchParams.get("returnTo"));
+  const [lockedUntil, setLockedUntil] = useState<number | null>(null);
+  const [now, setNow] = useState(() => Date.now());
   const login = useLogin({
     onSuccess: () => navigate(returnTo, { replace: true }),
+    onError: (error) => {
+      if (
+        error instanceof APIError &&
+        error.status === 429 &&
+        error.retryAfter != null
+      ) {
+        setLockedUntil(Date.now() + error.retryAfter * 1000);
+        setNow(Date.now());
+      }
+    },
   });
+
+  useEffect(() => {
+    if (lockedUntil === null) {
+      return;
+    }
+
+    const timer = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(timer);
+  }, [lockedUntil]);
+
+  const secondsLeft =
+    lockedUntil === null
+      ? 0
+      : Math.max(0, Math.ceil((lockedUntil - now) / 1000));
+  const locked = secondsLeft > 0;
+
+  useEffect(() => {
+    if (lockedUntil !== null && secondsLeft === 0) {
+      setLockedUntil(null);
+    }
+  }, [lockedUntil, secondsLeft]);
 
   return (
     <form
       onSubmit={form.handleSubmit((v) => {
-        if (!login.isPending) {
+        if (!login.isPending && !locked) {
           login.mutate(v);
         }
       })}
@@ -58,9 +93,9 @@ export default function LoginPage() {
               color="primary"
               className="w-full md:w-auto min-w-[100px]"
               loading={login.isPending}
-              disabled={login.isPending}
+              disabled={login.isPending || locked}
             >
-              Login
+              {locked ? `Try again in ${secondsLeft}s` : "Login"}
             </Button>
           </Card.Actions>
         </Card.Body>

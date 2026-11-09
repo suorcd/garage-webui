@@ -9,15 +9,20 @@ const { apiPost, toastError } = vi.hoisted(() => ({
   toastError: vi.fn(),
 }));
 
-vi.mock("@/lib/api", () => ({
-  default: { get: vi.fn(), post: apiPost },
-}));
+vi.mock("@/lib/api", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/api")>();
+  return {
+    ...actual,
+    default: { get: vi.fn(), post: apiPost },
+  };
+});
 
 vi.mock("sonner", () => ({
   toast: { success: vi.fn(), error: toastError, warning: vi.fn() },
 }));
 
 import LoginPage from "./login";
+import { APIError } from "@/lib/api";
 
 function deferred<T>() {
   let resolve!: (value: T) => void;
@@ -129,6 +134,22 @@ describe("LoginPage", () => {
       (screen.getByRole("button", { name: "Login" }) as HTMLButtonElement)
         .disabled,
     ).toBe(false);
+    expect(screen.queryByText("home content")).toBeNull();
+  });
+
+  it("disables the login button until the lockout ends", async () => {
+    const user = userEvent.setup();
+    apiPost.mockRejectedValueOnce(
+      new APIError("too many login attempts", 429, 30)
+    );
+    renderLogin(["/auth/login"]);
+
+    await fillAndSubmit(user);
+
+    const button = (await screen.findByRole("button", {
+      name: /Try again in/,
+    })) as HTMLButtonElement;
+    expect(button.disabled).toBe(true);
     expect(screen.queryByText("home content")).toBeNull();
   });
 

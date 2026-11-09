@@ -4,7 +4,10 @@ import { loginSchema } from "./schema";
 import api from "@/lib/api";
 import { toast } from "sonner";
 
-export const useLogin = (options?: { onSuccess?: () => void }) => {
+export const useLogin = (options?: {
+  onSuccess?: () => void;
+  onError?: (error: Error) => void;
+}) => {
   const queryClient = useQueryClient();
 
   return useMutation({
@@ -20,6 +23,7 @@ export const useLogin = (options?: { onSuccess?: () => void }) => {
     },
     onError: (err) => {
       toast.error(err?.message || "Unknown error");
+      options?.onError?.(err);
     },
   });
 };
