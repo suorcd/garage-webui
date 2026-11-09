@@ -64,7 +64,7 @@ func (f *fakeAliasGarage) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		for _, bucket := range f.buckets {
 			if bucket.KeyID == id {
 				w.Header().Set("Content-Type", "application/json")
-				json.NewEncoder(w).Encode(schema.KeyElement{
+				json.NewEncoder(w).Encode(schema.KeySecret{
 					AccessKeyID:     id,
 					SecretAccessKey: "secret-" + id,
 				})

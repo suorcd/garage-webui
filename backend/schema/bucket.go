@@ -32,12 +32,12 @@ type LocalAlias struct {
 	Alias       string `json:"alias"`
 }
 
+// KeyElement is a browser-facing key on a bucket. It must not hold a secret.
 type KeyElement struct {
 	AccessKeyID        string      `json:"accessKeyId"`
 	Name               string      `json:"name"`
 	Permissions        Permissions `json:"permissions"`
 	BucketLocalAliases []string    `json:"bucketLocalAliases"`
-	SecretAccessKey    string      `json:"secretAccessKey"`
 }
 
 type Permissions struct {

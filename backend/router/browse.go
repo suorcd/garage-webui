@@ -797,7 +797,7 @@ func getBucketAccess(ctx context.Context, identifier string, needWrite bool) (*b
 		return nil, err
 	}
 
-	var keyData schema.KeyElement
+	var keyData schema.KeySecret
 	if err := json.Unmarshal(keyBody, &keyData); err != nil {
 		return nil, err
 	}
