@@ -949,3 +949,40 @@ func TestStatusIsReachableWithoutSession(t *testing.T) {
 		t.Fatalf("expected authenticated=false without a session, got %+v", status)
 	}
 }
+
+// TestRouteAuthSurface pins which routes are reachable without a session. The
+// public list is a contract: the UI reads the status route before it can
+// render the login form, and a 401 there is indistinguishable from a server
+// fault. A route that drifts across the middleware boundary fails here.
+func TestRouteAuthSurface(t *testing.T) {
+	t.Setenv("AUTH_USER_PASS", "user:hash")
+	t.Setenv("AUTH_DISABLED", "")
+
+	handler := newTestAPIHandler()
+
+	cases := []struct {
+		method string
+		path   string
+		public bool
+	}{
+		{http.MethodGet, "/auth/status", true},
+		{http.MethodGet, "/config", false},
+		{http.MethodGet, "/buckets", false},
+		{http.MethodGet, "/v2/GetClusterStatus", false},
+		{http.MethodPost, "/v2/DeleteKey", false},
+	}
+
+	for _, tc := range cases {
+		req := httptest.NewRequest(tc.method, tc.path, strings.NewReader(`{}`))
+		req.Header.Set("X-Requested-With", "XMLHttpRequest")
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, req)
+
+		if tc.public && rec.Code == http.StatusUnauthorized {
+			t.Errorf("%s %s must answer without a session, got 401", tc.method, tc.path)
+		}
+		if !tc.public && rec.Code != http.StatusUnauthorized {
+			t.Errorf("%s %s must require a session, got %d: %s", tc.method, tc.path, rec.Code, rec.Body.String())
+		}
+	}
+}
