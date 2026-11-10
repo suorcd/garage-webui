@@ -32,7 +32,8 @@ func TestAuthMiddlewareRejectsRequestsWhenCredentialsAreUnset(t *testing.T) {
 
 	handler := newTestAPIHandler()
 
-	req := httptest.NewRequest(http.MethodGet, "/auth/status", nil)
+	// /auth/status is public by design, so probe a protected route.
+	req := httptest.NewRequest(http.MethodGet, "/config", nil)
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
 
@@ -47,7 +48,9 @@ func TestAuthMiddlewareAllowsRequestsWhenAuthIsDisabled(t *testing.T) {
 
 	handler := newTestAPIHandler()
 
-	req := httptest.NewRequest(http.MethodGet, "/auth/status", nil)
+	// /auth/status answers 200 without a session on any configuration, so it
+	// cannot show that the middleware passed the request. Use a protected route.
+	req := httptest.NewRequest(http.MethodGet, "/config", nil)
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
 
@@ -157,8 +160,9 @@ func TestGetStatusReportsUnauthenticatedWhenAuthIsEnabledWithoutSession(t *testi
 	t.Setenv("AUTH_USER_PASS", "admin:unused-hash")
 	t.Setenv("AUTH_DISABLED", "")
 
-	// Call the handler directly: the middleware never lets a session-less
-	// request through when auth is enabled, so the router cannot show it.
+	// Call the handler directly. The router also reaches it without a session
+	// (see TestStatusIsReachableWithoutSession); this test pins the handler's
+	// own answer.
 	auth := &Auth{}
 	sessionMgr := utils.InitSessionManager()
 	handler := sessionMgr.LoadAndSave(http.HandlerFunc(auth.GetStatus))
@@ -651,10 +655,10 @@ func TestLoginRotatesSessionToken(t *testing.T) {
 		t.Error("expected login to rotate the session token, got the same token")
 	}
 
-	if code := statusCodeWithSessionCookie(t, handler, "/auth/status", first); code != http.StatusUnauthorized {
+	if code := statusCodeWithSessionCookie(t, handler, "/config", first); code != http.StatusUnauthorized {
 		t.Errorf("expected the old token to be rejected with 401, got %d", code)
 	}
-	if code := statusCodeWithSessionCookie(t, handler, "/auth/status", second); code != http.StatusOK {
+	if code := statusCodeWithSessionCookie(t, handler, "/config", second); code != http.StatusOK {
 		t.Errorf("expected the new token to return 200, got %d", code)
 	}
 }
@@ -694,7 +698,7 @@ func TestLogoutDestroysSessionToken(t *testing.T) {
 		t.Errorf("expected logout to delete or rotate the session cookie, got value %q with MaxAge %d", logoutCookie.Value, logoutCookie.MaxAge)
 	}
 
-	if code := statusCodeWithSessionCookie(t, handler, "/auth/status", token); code != http.StatusUnauthorized {
+	if code := statusCodeWithSessionCookie(t, handler, "/config", token); code != http.StatusUnauthorized {
 		t.Errorf("expected the logged-out token to be rejected with 401, got %d", code)
 	}
 }
@@ -914,5 +918,34 @@ func TestLoginReadOnlyRole(t *testing.T) {
 
 	if readRec.Code != http.StatusOK {
 		t.Fatalf("expected a read-only GET to return 200, got %d: %s", readRec.Code, readRec.Body.String())
+	}
+}
+
+// TestStatusIsReachableWithoutSession pins the route the UI reads before it
+// can render the login form. It must answer 200 with authenticated=false, not
+// 401 from the auth middleware.
+func TestStatusIsReachableWithoutSession(t *testing.T) {
+	t.Setenv("AUTH_USER_PASS", "user:hash")
+	t.Setenv("AUTH_DISABLED", "")
+
+	handler := newTestAPIHandler()
+
+	req := httptest.NewRequest(http.MethodGet, "/auth/status", nil)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status 200 without a session, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	var status authStatusResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &status); err != nil {
+		t.Fatalf("cannot decode status: %v", err)
+	}
+	if !status.Enabled {
+		t.Fatalf("expected enabled=true, got %+v", status)
+	}
+	if status.Authenticated {
+		t.Fatalf("expected authenticated=false without a session, got %+v", status)
 	}
 }

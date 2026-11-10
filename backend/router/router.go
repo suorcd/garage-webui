@@ -11,10 +11,12 @@ func HandleApiRouter() http.Handler {
 
 	auth := &Auth{trustedProxies: parseTrustedProxies(utils.GetEnv("TRUSTED_PROXIES", ""))}
 	mux.HandleFunc("POST /auth/login", auth.Login)
+	// The status route answers without a session, so it must stay outside the
+	// auth middleware. The UI reads it before it can render the login form.
+	mux.HandleFunc("GET /auth/status", auth.GetStatus)
 
 	router := http.NewServeMux()
 	router.HandleFunc("POST /auth/logout", auth.Logout)
-	router.HandleFunc("GET /auth/status", auth.GetStatus)
 
 	config := &Config{}
 	router.HandleFunc("GET /config", config.GetAll)
