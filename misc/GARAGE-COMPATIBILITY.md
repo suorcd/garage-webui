@@ -4,7 +4,7 @@ This file records the supported Garage versions and the decision on admin API ro
 
 ## Supported versions
 
-Source: the Garage 2.4.1 and 2.5.0 admin API source files. The deployment runs Garage 2.4.1.
+Source: the Garage 2.4.1 and 2.5.0 admin API source files. The deployment runs Garage 2.5.0.
 
 | Capability | Garage 2.4.1 | Garage 2.5.0 |
 | --- | --- | --- |
@@ -13,8 +13,11 @@ Source: the Garage 2.4.1 and 2.5.0 admin API source files. The deployment runs G
 | Lifecycle rules | Yes | Yes |
 | Presigned download links | Yes | Yes |
 | Key createBucket readback | Yes (via `GetKeyInfo`) | Yes (via `ListKeysInfo`) |
+| Key list identifier | `id` from `ListKeys` | `accessKeyId` from `ListKeysInfo` |
 
 Garage 2.4.1 has no `ListKeysInfo`. The keys screen falls back to `ListKeys` and reads each key's permissions from `GetKeyInfo`.
+
+The two key list routes name the identifier differently. `ListKeys` answers with `ListKeysResponseItem` objects, which carry `id`. `ListKeysInfo` answers with `GetKeyInfoResponse` objects, which carry `accessKeyId`. The UI reads `id` everywhere, so `toKey` in `src/pages/keys/hooks.ts` maps both shapes to `id`.
 
 ## Admin API routes used by the UI
 

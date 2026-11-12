@@ -11,25 +11,59 @@ type KeyInfoResponse = {
   permissions?: KeyPermissions;
 };
 
+// Garage names the key identifier differently on each list route:
+// - ListKeysInfo (Garage 2.5) answers with GetKeyInfoResponse objects, which
+//   carry `accessKeyId`.
+// - ListKeys (Garage 2.4 and 2.5) answers with ListKeysResponseItem objects,
+//   which carry `id`.
+// The UI reads `id` everywhere, so both routes go through toKey.
+type RawKey = {
+  id?: string | null;
+  accessKeyId?: string | null;
+  name?: string | null;
+  created?: string | null;
+  expiration?: string | null;
+  expired?: boolean | null;
+  permissions?: KeyPermissions | null;
+};
+
+export const toKey = (raw: RawKey): Key => {
+  const id = raw.id ?? raw.accessKeyId;
+  if (!id) {
+    throw new Error("Garage returned an access key without an identifier");
+  }
+
+  return {
+    id,
+    name: raw.name ?? "",
+    created: raw.created ?? undefined,
+    expiration: raw.expiration ?? null,
+    expired: raw.expired ?? false,
+    permissions: raw.permissions ?? undefined,
+  };
+};
+
 export const useKeys = () => {
   return useQuery({
     queryKey: ["keys"],
     queryFn: async () => {
       try {
-        return await api.get<Key[]>("/v2/ListKeysInfo");
+        const keys = await api.get<RawKey[]>("/v2/ListKeysInfo");
+        return keys.map(toKey);
       } catch (error) {
         // Garage 2.4 has no ListKeysInfo. Fall back to ListKeys, then
         // read each key's permissions from GetKeyInfo without the secret.
         if (error instanceof APIError && error.status === 404) {
-          const keys = await api.get<Key[]>("/v2/ListKeys");
+          const keys = await api.get<RawKey[]>("/v2/ListKeys");
+          const normalisedKeys = keys.map(toKey);
           const details = await Promise.allSettled(
-            keys.map((key) =>
+            normalisedKeys.map((key) =>
               api.get<KeyInfoResponse>("/v2/GetKeyInfo", {
                 params: { id: key.id },
               })
             )
           );
-          return keys.map((key, index) => {
+          return normalisedKeys.map((key, index) => {
             const entry = details[index];
             if (
               entry.status === "fulfilled" &&
