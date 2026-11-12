@@ -36,6 +36,36 @@ function wrapper({ children }: { children: ReactNode }) {
 }
 
 describe("useKeys", () => {
+  it("maps the ListKeysInfo accessKeyId to the key id", async () => {
+    apiGet.mockResolvedValueOnce([
+      {
+        accessKeyId: "GK11111111111111111111111111111111",
+        name: "first",
+        created: "2026-01-02T03:04:05Z",
+        expiration: null,
+        expired: false,
+        permissions: { createBucket: true },
+      },
+    ]);
+
+    const { result } = renderHook(() => useKeys(), { wrapper });
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+
+    expect(apiGet).toHaveBeenCalledTimes(1);
+    expect(apiGet).toHaveBeenCalledWith("/v2/ListKeysInfo");
+    expect(result.current.data).toEqual([
+      {
+        id: "GK11111111111111111111111111111111",
+        name: "first",
+        created: "2026-01-02T03:04:05Z",
+        expiration: null,
+        expired: false,
+        permissions: { createBucket: true },
+      },
+    ]);
+  });
+
   it("falls back to ListKeys and loads permissions from GetKeyInfo when ListKeysInfo is missing", async () => {
     apiGet
       .mockRejectedValueOnce(new APIError("not found", 404))
@@ -58,6 +88,9 @@ describe("useKeys", () => {
       {
         id: "key-1",
         name: "first",
+        created: undefined,
+        expiration: null,
+        expired: false,
         permissions: { createBucket: true },
       },
     ]);
@@ -72,5 +105,17 @@ describe("useKeys", () => {
 
     expect(apiGet).toHaveBeenCalledTimes(1);
     expect(apiGet).toHaveBeenCalledWith("/v2/ListKeysInfo");
+  });
+
+  it("fails when a key has no identifier", async () => {
+    apiGet.mockResolvedValueOnce([{ name: "no id" }]);
+
+    const { result } = renderHook(() => useKeys(), { wrapper });
+
+    await waitFor(() => expect(result.current.isError).toBe(true));
+
+    expect(result.current.error?.message).toBe(
+      "Garage returned an access key without an identifier"
+    );
   });
 });
